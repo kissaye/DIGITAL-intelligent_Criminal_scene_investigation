@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: criminal_scene
+      POSTGRES_USER: criminal_scene
+      POSTGRES_PASSWORD: criminal_scene_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U criminal_scene -d criminal_scene"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://criminal_scene:criminal_scene_dev@db:5432/criminal_scene
+      JWT_SECRET_KEY: local-docker-development-only-change-before-deployment
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    depends_on:
+      db:
+        condition: service_healthy
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ""
+        VITE_USE_MOCK: "false"
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+volumes:
+  postgres_data:

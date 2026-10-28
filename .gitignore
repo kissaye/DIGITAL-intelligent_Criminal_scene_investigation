@@ -8,6 +8,7 @@ venv/
 .env
 .env.*
 !.env.example
+backend/*.db
 
 # Local build and render outputs
 tmp/

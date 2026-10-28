@@ -23,6 +23,33 @@
 - 每个模块在独立 `feature/` 分支开发，通过 Pull Request 审查后合并。
 - 不提交 `.env`、真实案件材料、授权材料、点云文件或大体积媒体文件。
 
+## M0 后端启动
+
+后端位于 `backend/`，提供 JWT 登录和角色身份接口。默认使用 SQLite，便于本地前后端联调；容器配置使用 PostgreSQL。
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+alembic upgrade head
+python -m app.seed
+uvicorn app.main:app --reload
+```
+
+打开 <http://127.0.0.1:8000/docs> 查看 Swagger 文档。健康检查为 `GET /api/v1/health`。
+
+三个仅用于本地演示的预置账号均使用密码 `M0DemoPass!2026`：`admin`（ADMIN）、`teacher`（TEACHER）、`student`（STUDENT）。种子命令可安全重复运行，不会覆盖已存在账号的密码。
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/v1/auth/login -ContentType 'application/json' -Body '{"username":"admin","password":"M0DemoPass!2026"}'
+```
+
+将响应中的 `data.accessToken` 作为 `Authorization: Bearer <token>` 调用 `GET /api/v1/auth/me`。
+
+具备 Docker 的环境可从仓库根目录运行 `docker compose up --build`。该配置会启动 PostgreSQL、后端与前端；迁移和种子数据自动初始化。打开 <http://localhost:5173>，使用上述演示账号登录。
+
 ## 当前资料
 
 - `刑侦三维案例脱敏与教学实训平台 PRD V1.0.docx`
