@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local build and render outputs
+tmp/
+dist/
+build/
+
+# Local data and case materials must never be committed
+data/
+storage/
+sample-data/private/
+*.las
+*.laz
+*.e57
+*.goslam
+*.pcd
+*.ply
+*.mp4
+
+# Third-party and source materials retained locally only
+产品资料/
+数智刑勘——刑侦现场数字化产教融合平台(1).docx
+数智刑勘平台 PRD 重写版.docx
