@@ -10,7 +10,7 @@ from app.api.router import api_router
 from app.core.config import get_settings
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, version="0.1.0", description="M0 identity and role APIs.")
+app = FastAPI(title=settings.app_name, version="0.2.0", description="M0 identity and M1 controlled case import APIs.")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 

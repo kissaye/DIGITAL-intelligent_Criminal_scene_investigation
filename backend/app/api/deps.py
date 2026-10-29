@@ -24,3 +24,9 @@ def get_current_user(credentials: Annotated[HTTPAuthorizationCredentials | None,
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is not available", headers={"WWW-Authenticate": "Bearer"})
     return user
+
+
+def require_admin(user: Annotated[User, Depends(get_current_user)]) -> User:
+    if "ADMIN" not in {role.code for role in user.roles}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role is required")
+    return user

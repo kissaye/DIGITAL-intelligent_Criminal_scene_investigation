@@ -21,9 +21,32 @@ services:
       DATABASE_URL: postgresql+psycopg://criminal_scene:criminal_scene_dev@db:5432/criminal_scene
       JWT_SECRET_KEY: local-docker-development-only-change-before-deployment
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      STORAGE_ROOT: /app/storage
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - case_storage:/app/storage
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+  redis:
+    image: redis:7-alpine
+  worker:
+    build:
+      context: ./backend
+    command: rq worker pointcloud
+    environment:
+      DATABASE_URL: postgresql+psycopg://criminal_scene:criminal_scene_dev@db:5432/criminal_scene
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ROOT: /app/storage
+    volumes:
+      - case_storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
   frontend:
     build:
       context: ./frontend
@@ -36,3 +59,4 @@ services:
       - backend
 volumes:
   postgres_data:
+  case_storage:

@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 480
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     app_env: str = "development"
+    storage_root: str = "./storage"
+    max_upload_size_bytes: int = 1073741824
+    pdal_path: str = "pdal"
+    potree_converter_path: str = "PotreeConverter"
+    conversion_timeout_seconds: int = 3600
+    redis_url: str = "redis://localhost:6379/0"
+    rq_queue_name: str = "pointcloud"
 
     @property
     def cors_origin_list(self) -> list[str]:

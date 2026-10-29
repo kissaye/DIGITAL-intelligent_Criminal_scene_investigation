@@ -50,6 +50,16 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/v1/auth/login -ContentT
 
 具备 Docker 的环境可从仓库根目录运行 `docker compose up --build`。该配置会启动 PostgreSQL、后端与前端；迁移和种子数据自动初始化。打开 <http://localhost:5173>，使用上述演示账号登录。
 
+## M1 案例导入与转换
+
+仅 `ADMIN` 可以创建案例、上传 `.las` / `.laz` 原始点云，并创建转换版本。文件上传后保存于 `STORAGE_ROOT/cases/<case_id>/raw/`；该目录没有静态路由，数据库只记录 `storage_key` 与校验和等元数据。默认文件上限为 1 GiB，可用 `MAX_UPLOAD_SIZE_BYTES` 调整。
+
+创建版本会生成后台任务，状态为 `PENDING → RUNNING → SUCCEEDED / FAILED`；版本为 `DRAFT → PROCESSING → READY`，工具或转换失败时版本为 `FAILED` 并写入错误原因。PDAL 和 PotreeConverter 分别由 `PDAL_PATH`、`POTREE_CONVERTER_PATH` 指定；没有安装工具时任务会明确失败，不会生成伪造的 READY 版本。
+
+转换任务通过 Redis + RQ 的 `pointcloud` 队列执行，不会占用 API 进程。Docker Compose 已包含 Redis 与 `worker` 服务；非容器环境需自行启动 Redis 后运行 `rq worker pointcloud`。
+
+M1 API：`POST /api/v1/cases`、`GET /api/v1/cases`、`GET /api/v1/cases/{caseId}`、`POST /api/v1/cases/{caseId}/files`、`POST /api/v1/cases/{caseId}/versions`、`GET /api/v1/case-versions/{versionId}`、`GET /api/v1/jobs/{jobId}`。上传接口使用表单字段 `upload`。所有创建、上传和转换结果均写入基础审计日志。
+
 ## 当前资料
 
 - `刑侦三维案例脱敏与教学实训平台 PRD V1.0.docx`
