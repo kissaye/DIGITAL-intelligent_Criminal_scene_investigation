@@ -60,6 +60,12 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/v1/auth/login -ContentT
 
 M1 API：`POST /api/v1/cases`、`GET /api/v1/cases`、`GET /api/v1/cases/{caseId}`、`POST /api/v1/cases/{caseId}/files`、`POST /api/v1/cases/{caseId}/versions`、`GET /api/v1/case-versions/{versionId}`、`GET /api/v1/jobs/{jobId}`。上传接口使用表单字段 `upload`。所有创建、上传和转换结果均写入基础审计日志。
 
+## M2 受控点云浏览
+
+M2 仅向管理员开放 READY 版本的 `GET /api/v1/case-versions/{versionId}/viewer-config`。该接口签发一个仅绑定该版本、短期有效的 HttpOnly Cookie，并返回受控的 Potree `metadata.json` 地址。Potree 的 metadata 和瓦片经 `/api/v1/viewer-assets/{versionId}/...` 逐项代理读取；代理会校验 Cookie 中的版本声明、拒绝路径穿越，并且绝不映射原始 LAS/LAZ 或整个 storage 目录。打开 Viewer 和每次资源读取都会写入审计日志。
+
+管理员可在 READY 版本下维护自己的 `ADMIN_WORKSPACE` 标注与测距记录。测距距离由后端基于两端三维坐标重新计算，忽略客户端提交的 distance。
+
 ## 当前资料
 
 - `刑侦三维案例脱敏与教学实训平台 PRD V1.0.docx`

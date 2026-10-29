@@ -87,3 +87,31 @@ class AuditLog(Base):
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     detail: Mapped[dict | None] = mapped_column(JSON(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class Annotation(Base):
+    __tablename__ = "annotations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    case_version_id: Mapped[str] = mapped_column(ForeignKey("case_versions.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String(40), nullable=False, default="ADMIN_WORKSPACE")
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    geometry: Mapped[dict] = mapped_column(JSON(), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    viewer_state: Mapped[dict | None] = mapped_column(JSON(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class Measurement(Base):
+    __tablename__ = "measurements"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    case_version_id: Mapped[str] = mapped_column(ForeignKey("case_versions.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    start_point: Mapped[dict] = mapped_column(JSON(), nullable=False)
+    end_point: Mapped[dict] = mapped_column(JSON(), nullable=False)
+    distance: Mapped[float] = mapped_column(nullable=False)
+    viewer_state: Mapped[dict | None] = mapped_column(JSON(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

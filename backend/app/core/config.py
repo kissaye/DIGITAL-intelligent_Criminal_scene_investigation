@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     conversion_timeout_seconds: int = 3600
     redis_url: str = "redis://localhost:6379/0"
     rq_queue_name: str = "pointcloud"
+    viewer_token_expire_minutes: int = 15
 
     @property
     def cors_origin_list(self) -> list[str]:
