@@ -9,6 +9,7 @@ const auth = useAuthStore()
 const user = computed(() => auth.user)
 const roles = computed(() => roleLabel(user.value?.roles))
 const isAdmin = computed(() => user.value?.roles.includes('ADMIN'))
+const isStudent = computed(() => user.value?.roles.includes('STUDENT'))
 
 async function logout() {
   auth.clear()
@@ -27,6 +28,7 @@ async function logout() {
       <p>当前用户：<strong>{{ user?.displayName || user?.username }}</strong></p>
       <p>当前角色：<el-tag type="primary">{{ roles }}</el-tag></p>
       <el-button v-if="isAdmin" type="primary" @click="router.push('/admin/cases')">案例管理</el-button>
+      <el-button v-if="isStudent" type="primary" @click="router.push('/student/tasks')">我的实训任务</el-button>
       <el-empty description="模块开发中" :image-size="100" />
     </el-card>
   </main>

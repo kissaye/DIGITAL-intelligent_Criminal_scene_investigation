@@ -13,6 +13,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/admin/cases/:caseId/viewer', name: 'admin-case-viewer', component: () => import('@/views/CaseViewerView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
   { path: '/teacher', name: 'teacher', component: () => import('@/views/HomeView.vue'), meta: { requiresAuth: true, roles: ['TEACHER'] } },
   { path: '/student', name: 'student', component: () => import('@/views/HomeView.vue'), meta: { requiresAuth: true, roles: ['STUDENT'] } },
+  { path: '/student/tasks', name: 'student-tasks', component: () => import('@/views/StudentTaskListView.vue'), meta: { requiresAuth: true, roles: ['STUDENT'] } },
+  { path: '/student/tasks/:taskId', name: 'student-task-workspace', component: () => import('@/views/StudentWorkspaceView.vue'), meta: { requiresAuth: true, roles: ['STUDENT'] } },
   { path: '/:pathMatch(.*)*', redirect: '/login' },
 ]
 

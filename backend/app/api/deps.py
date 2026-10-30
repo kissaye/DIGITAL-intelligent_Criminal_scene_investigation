@@ -30,3 +30,9 @@ def require_admin(user: Annotated[User, Depends(get_current_user)]) -> User:
     if "ADMIN" not in {role.code for role in user.roles}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role is required")
     return user
+
+
+def require_student(user: Annotated[User, Depends(get_current_user)]) -> User:
+    if "STUDENT" not in {role.code for role in user.roles}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student role is required")
+    return user

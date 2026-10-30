@@ -66,6 +66,10 @@ M2 仅向管理员开放 READY 版本的 `GET /api/v1/case-versions/{versionId}/
 
 管理员可在 READY 版本下维护自己的 `ADMIN_WORKSPACE` 标注与测距记录。测距距离由后端基于两端三维坐标重新计算，忽略客户端提交的 distance。
 
+## M3 学生实训
+
+学生接口均要求 `STUDENT` 角色及任务分配记录。工作台只返回该学生自己的草稿、提交标记和测距，并对绑定的 READY 版本签发任务限定的短期 Viewer Cookie。草稿可重复保存；首次提交后转为 `SUBMITTED`，后续草稿或提交写入会被拒绝。截止时间之后仅在 `allow_late=true` 时可提交。
+
 ## 当前资料
 
 - `刑侦三维案例脱敏与教学实训平台 PRD V1.0.docx`

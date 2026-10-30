@@ -46,7 +46,7 @@ def viewer_asset(version_id: str, asset_path: str, request: Request, db: Annotat
     token = request.cookies.get(f"viewer_{version_id}")
     try:
         claims = jwt.decode(token or "", settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        if claims.get("type") != "viewer" or claims.get("version") != version_id: raise ValueError()
+        if claims.get("type") not in {"viewer", "student_viewer"} or claims.get("version") != version_id: raise ValueError()
     except Exception: raise HTTPException(401, "Viewer asset credential is invalid or expired")
     version = _ready(db, version_id)
     root = (Path(settings.storage_root).resolve() / "cases" / version.case_id / "versions" / version.id / "potree").resolve()
