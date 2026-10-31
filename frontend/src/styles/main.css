@@ -2,3 +2,5 @@
 * { box-sizing: border-box; }
 body { min-width: 320px; min-height: 100vh; margin: 0; }
 button, input { font: inherit; }
+
+.teacher-page{max-width:1200px;margin:auto;padding:32px}.teacher-page header{display:flex;align-items:center;gap:16px;margin-bottom:24px}.teacher-page h1{flex:1}.teacher-page .el-card{margin-top:24px}.teacher-page .el-form{max-width:900px}.teacher-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fa;padding:12px}.teacher-page .actions{display:flex;gap:12px;margin:20px 0}.teacher-page .rubric-row{display:flex;gap:12px;align-items:center;margin-bottom:12px}

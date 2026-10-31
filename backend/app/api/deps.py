@@ -36,3 +36,9 @@ def require_student(user: Annotated[User, Depends(get_current_user)]) -> User:
     if "STUDENT" not in {role.code for role in user.roles}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student role is required")
     return user
+
+
+def require_teacher(user: Annotated[User, Depends(get_current_user)]) -> User:
+    if "TEACHER" not in {role.code for role in user.roles}:
+        raise HTTPException(status_code=403, detail="Teacher role is required")
+    return user
