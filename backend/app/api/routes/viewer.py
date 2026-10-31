@@ -48,6 +48,16 @@ def viewer_asset(version_id: str, asset_path: str, request: Request, db: Annotat
         claims = jwt.decode(token or "", settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         if claims.get("type") not in {"viewer", "student_viewer"} or claims.get("version") != version_id: raise ValueError()
     except Exception: raise HTTPException(401, "Viewer asset credential is invalid or expired")
+    if claims.get("type") == "student_viewer":
+        from app.models.practice import Task
+        from app.services.practice_access import require_assignment, require_open_task
+        student = db.get(User, int(claims["sub"]))
+        if not student or not student.is_active or "STUDENT" not in {r.code for r in student.roles}:
+            raise HTTPException(401, "Student is unavailable")
+        task = db.get(Task, claims.get("task"))
+        require_assignment(db, task, student.id)
+        if task.case_version_id != version_id: raise HTTPException(403, "Task version mismatch")
+        require_open_task(task)
     version = _ready(db, version_id)
     root = (Path(settings.storage_root).resolve() / "cases" / version.case_id / "versions" / version.id / "potree").resolve()
     target = (root / asset_path).resolve()
