@@ -1,0 +1,34 @@
+{
+  "server": "PostgreSQL 16.15, compiled by Visual C++ build 1944, 64-bit",
+  "revision": "202611010007",
+  "checks": [
+    "M3 pg_dump custom-format backup: passed",
+    "upgrade 202610310006: legacy rows unchanged",
+    "upgrade 202611010007: legacy rows unchanged",
+    "new nullable columns preserve unassigned M3 tasks/versions",
+    "downgrade 202610310006: legacy rows unchanged",
+    "downgrade 202610300005: legacy rows unchanged",
+    "repeat upgrade to head: passed",
+    "PostgreSQL-backed M4/M5 API publication/task/submission/Decimal grading/revocation: passed",
+    "pg_restore into separate database: all M3 fixture rows identical"
+  ],
+  "legacyRowCounts": {
+    "roles": 3,
+    "users": 3,
+    "user_roles": 3,
+    "cases": 1,
+    "files": 1,
+    "case_versions": 1,
+    "courses": 1,
+    "classes": 1,
+    "class_members": 1,
+    "tasks": 1,
+    "task_assignments": 1,
+    "submissions": 1,
+    "submission_marks": 1,
+    "submission_measurements": 1,
+    "audit_logs": 1
+  },
+  "baselineSha256": "98d92f57737b9d0092b2b5d88e667062bebe962d2666b1be7191825f73bfb9e9",
+  "note": "Synthetic isolated PostgreSQL validation; no production data migrated"
+}
