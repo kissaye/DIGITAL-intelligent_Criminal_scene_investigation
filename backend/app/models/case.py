@@ -46,6 +46,7 @@ class File(Base):
 
 
 class CaseVersion(Base):
+    parent_version_id: Mapped[str | None] = mapped_column(ForeignKey("case_versions.id"), nullable=True)
     __tablename__ = "case_versions"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     case_id: Mapped[str] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), nullable=False, index=True)

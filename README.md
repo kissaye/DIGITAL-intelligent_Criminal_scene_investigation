@@ -81,3 +81,7 @@ M2 仅向管理员开放 READY 版本的 `GET /api/v1/case-versions/{versionId}/
 - `刑侦三维案例脱敏与教学实训平台 PRD V1.0.docx`
 - `刑侦三维案例平台 安全合规与竞赛材料包.docx`
 - `build_prd_baseline.py` 与 `build_compliance_pack.py`：以上文档的生成脚本。
+
+## M5 案例发布与审计
+
+新增独立教学副本、人工发布、授权登记与撤销、有效期拦截、版本谱系和审计查询。M3/M4 现在仅使用有效的 PUBLISHED 版本。升级说明、SQL 和验收步骤见 [M5 交付说明](docs/m5/README.md)。

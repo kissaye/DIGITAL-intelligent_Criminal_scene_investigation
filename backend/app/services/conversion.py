@@ -48,6 +48,11 @@ def run_conversion(job_id: str) -> None:
         if job is None:
             return
         version = job.case_version
+        from app.models.practice import Task
+        if version.status == "PUBLISHED" or db.scalar(select(Task.id).where(Task.case_version_id==version.id)):
+            return
+        if job.status != "PENDING" or version.status != "PROCESSING":
+            return
         job.status, job.progress, job.started_at = "RUNNING", 5, datetime.now(UTC)
         version.status, version.error_message = "PROCESSING", None
 

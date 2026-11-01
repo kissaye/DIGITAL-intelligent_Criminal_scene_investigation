@@ -3,6 +3,7 @@ import type { Bounds, CaseVersionStatus } from '@/types/case'
 const statusMap: Record<CaseVersionStatus, { text: string; type: 'info' | 'warning' | 'success' | 'danger' }> = {
   DRAFT: { text: '草稿', type: 'info' },
   PROCESSING: { text: '处理中', type: 'warning' },
+  PUBLISHED: { text: '已发布', type: 'success' },
   READY: { text: '已就绪', type: 'success' },
   FAILED: { text: '失败', type: 'danger' },
 }

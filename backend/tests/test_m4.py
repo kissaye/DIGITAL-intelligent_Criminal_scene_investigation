@@ -46,8 +46,13 @@ class TeachingWorkflow(unittest.TestCase):
             db.add(case); db.flush()
             file = File(case_id=case.id, storage_key='test/raw', original_name='fixture.las', mime_type='application/octet-stream', size_bytes=1, checksum_sha256='0'*64)
             db.add(file); db.flush()
-            version = CaseVersion(case_id=case.id, source_file_id=file.id, version_number=1, status='READY', viewer_manifest_key='test/metadata.json')
+            version = CaseVersion(case_id=case.id, source_file_id=file.id, version_number=1, status='PUBLISHED', viewer_manifest_key='test/metadata.json')
             db.add(version); db.flush(); self.version = version.id
+            from app.models.publication import CaseAuthorization, TeachingCopy
+            auth=CaseAuthorization(case_id=case.id,reference='test',scope='teaching',valid_until=datetime.now(UTC)+timedelta(days=30),created_by=admin.id)
+            db.add(auth);db.flush()
+            db.add(TeachingCopy(version_id=version.id,authorization_id=auth.id,manifest_key='teaching/test/metadata.json',checksum='0'*64,review_note='fixture',valid_until=datetime.now(UTC)+timedelta(days=30),published_by=admin.id))
+
 
     def tearDown(self):
         self.client.close(); app.dependency_overrides.clear(); self.engine.dispose(); self.tmp.cleanup()

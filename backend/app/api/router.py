@@ -10,3 +10,6 @@ api_router.include_router(viewer.router)
 api_router.include_router(student.router)
 
 api_router.include_router(teacher.router)
+
+from app.api.routes import publication
+api_router.include_router(publication.router)

@@ -4,6 +4,7 @@ import type { UserRole } from '@/types/auth'
 import { homeRouteForRoles } from '@/utils/auth'
 
 const routes: RouteRecordRaw[] = [
+  { path: '/admin/cases/:caseId/publication', component: () => import('@/views/CasePublicationView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
   { path: '/', redirect: '/login' },
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { guestOnly: true } },
   { path: '/admin', name: 'admin', component: () => import('@/views/HomeView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },

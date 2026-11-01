@@ -22,7 +22,7 @@ settings = get_settings()
 def _ready(db: Session, version_id: str) -> CaseVersion:
     item = db.scalar(select(CaseVersion).where(CaseVersion.id == version_id))
     if item is None: raise HTTPException(404, "Case version not found")
-    if item.status != "READY" or not item.viewer_manifest_key: raise HTTPException(409, "Viewer is unavailable until conversion is READY")
+    if item.status not in {"READY", "PUBLISHED"} or not item.viewer_manifest_key: raise HTTPException(409, "Viewer is unavailable until conversion is READY")
     return item
 
 def _annotation(item: Annotation) -> AnnotationData:
@@ -60,6 +60,12 @@ def viewer_asset(version_id: str, asset_path: str, request: Request, db: Annotat
         require_open_task(task)
     version = _ready(db, version_id)
     root = (Path(settings.storage_root).resolve() / "cases" / version.case_id / "versions" / version.id / "potree").resolve()
+    if claims.get("type") == "student_viewer":
+        from app.services.publication import require_teaching_version
+        copy = require_teaching_version(db,version)
+        storage = Path(settings.storage_root).resolve()
+        root = (storage / copy.manifest_key).resolve().parent
+        if storage not in root.parents: raise HTTPException(404,"Asset not found")
     target = (root / asset_path).resolve()
     if root not in target.parents and target != root: raise HTTPException(404, "Asset not found")
     if not target.is_file(): raise HTTPException(404, "Asset not found")

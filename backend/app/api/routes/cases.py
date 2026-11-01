@@ -101,8 +101,12 @@ def create_version(case_id: str, payload: VersionCreate, admin: Annotated[User, 
     source = db.scalar(select(File).where(File.id == payload.file_id, File.case_id == case_id))
     if source is None:
         raise HTTPException(status_code=404, detail="Source file not found for case")
+    if payload.parent_version_id:
+        parent = db.get(CaseVersion, payload.parent_version_id)
+        if not parent or parent.case_id != case_id:
+            raise HTTPException(422, "Parent version must belong to same case")
     version_number = (db.scalar(select(func.max(CaseVersion.version_number)).where(CaseVersion.case_id == case_id)) or 0) + 1
-    version = CaseVersion(case_id=case_id, source_file_id=source.id, version_number=version_number, status="PROCESSING")
+    version = CaseVersion(parent_version_id=payload.parent_version_id, case_id=case_id, source_file_id=source.id, version_number=version_number, status="PROCESSING")
     db.add(version)
     db.flush()
     job = Job(case_version_id=version.id, status="PENDING", progress=0)

@@ -17,6 +17,7 @@ from app.schemas.common import APIResponse
 from app.schemas.teacher import GradeInput, MemberInput, NameInput, TaskInput
 from app.services.practice_access import utc
 
+from app.services.publication import require_teaching_version
 router = APIRouter(prefix="/teacher", tags=["teacher"])
 
 
@@ -40,7 +41,11 @@ def owned_class(db, class_id, teacher):
 
 
 def audit(db, action, teacher, **detail):
-    db.add(AuditLog(action=action, actor_id=teacher.id, detail=detail))
+    task_id=detail.get("taskId")
+    submission=db.get(Submission,detail["submissionId"]) if detail.get("submissionId") else None
+    task=db.get(Task,task_id or submission.task_id) if task_id or submission else None
+    version=db.get(CaseVersion,task.case_version_id) if task else None
+    db.add(AuditLog(action=action, actor_id=teacher.id, case_id=version.case_id if version else None, case_version_id=version.id if version else None, detail=detail))
 
 
 def course_data(db, item):
@@ -124,8 +129,13 @@ def remove_member(class_id: str, student_id: int, user=Depends(require_teacher),
 
 @router.get("/case-versions")
 def versions(user=Depends(require_teacher), db: Session=Depends(get_db), rid=Depends(get_request_id)):
-    rows = db.execute(select(CaseVersion, Case.teaching_title).join(Case).where(CaseVersion.status == "READY", CaseVersion.viewer_manifest_key.is_not(None))).all()
-    return result([{"id": v.id, "teachingTitle": title, "versionNumber": v.version_number} for v, title in rows], rid)
+    rows = db.execute(select(CaseVersion, Case.teaching_title).join(Case).where(CaseVersion.status == "PUBLISHED", CaseVersion.viewer_manifest_key.is_not(None))).all()
+    available=[]
+    for v, title in rows:
+        try: require_teaching_version(db,v)
+        except HTTPException: continue
+        available.append({"id":v.id,"teachingTitle":title,"versionNumber":v.version_number})
+    return result(available,rid)
 
 
 def rubric_data(db, task_id):
@@ -144,8 +154,7 @@ def apply_task(db, item, p, user):
         if owned_class(db, class_id, user).course_id != p.course_id:
             raise HTTPException(422, "Class must belong to selected course")
     version = db.get(CaseVersion, p.case_version_id)
-    if not version or version.status != "READY" or not version.viewer_manifest_key:
-        raise HTTPException(409, "READY case version required")
+    require_teaching_version(db, version)
     for name in ("course_id", "title", "instructions", "case_version_id", "allow_late"):
         setattr(item, name, getattr(p, name))
     item.start_at = p.start_at.astimezone(UTC) if p.start_at else None
@@ -200,7 +209,7 @@ def publish(task_id: str, user=Depends(require_teacher), db: Session=Depends(get
     if not item.course_id or not rubric_data(db, item.id): raise HTTPException(409, "Course and rubric required")
     owned(db, Course, item.course_id, user)
     version = db.get(CaseVersion, item.case_version_id)
-    if not version or version.status != "READY" or not version.viewer_manifest_key: raise HTTPException(409, "READY case version required")
+    require_teaching_version(db, version)
     if item.due_at and utc(item.due_at) <= datetime.now(UTC): raise HTTPException(409, "Deadline has passed")
     class_ids = list(db.scalars(select(TaskClass.class_id).where(TaskClass.task_id == task_id)).all())
     for cid in class_ids:

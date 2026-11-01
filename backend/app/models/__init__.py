@@ -5,3 +5,5 @@ from app.models.practice import Class, ClassMember, Course, Submission, Submissi
 from app.models.teaching import TaskClass, RubricItem, SubmissionGrade, GradeItem
 
 __all__ = ["Role", "User", "Case", "CaseVersion", "File", "Job", "AuditLog", "Annotation", "Measurement"]
+
+from app.models.publication import CaseAuthorization, TeachingCopy
