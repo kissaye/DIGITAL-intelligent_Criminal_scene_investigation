@@ -12,6 +12,9 @@ from app.models.user import User
 from app.schemas.common import APIResponse
 from app.schemas.student import DraftPayload
 router=APIRouter(prefix="/student",tags=["student"]); settings=get_settings()
+def utc_time(value):
+    if value is None: return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 def assigned(db,task_id,user):
     task=db.scalar(select(Task).where(Task.id==task_id)); ok=db.scalar(select(TaskAssignment).where(TaskAssignment.task_id==task_id,TaskAssignment.student_id==user.id))
     if not task or not ok: raise HTTPException(404,"Task not found")
@@ -20,7 +23,8 @@ def draft(db,task,user): return db.scalar(select(Submission).where(Submission.ta
 def student_submission(db,t,u): return db.scalar(select(Submission).where(Submission.task_id==t.id,Submission.student_id==u.id).order_by(Submission.created_at.desc()))
 def taskdata(db,t,u):
     s=student_submission(db,t,u); v=db.scalar(select(CaseVersion).where(CaseVersion.id==t.case_version_id)); c=db.scalar(select(Case).where(Case.id==v.case_id)) if v else None; now=datetime.now(UTC)
-    state="SUBMITTED" if s and s.status=="SUBMITTED" else "NOT_STARTED" if t.start_at and now<t.start_at else "EXPIRED" if t.due_at and now>t.due_at and not t.allow_late else "IN_PROGRESS"
+    start,due=utc_time(t.start_at),utc_time(t.due_at)
+    state="SUBMITTED" if s and s.status=="SUBMITTED" else "NOT_STARTED" if start and now<start else "EXPIRED" if due and now>due and not t.allow_late else "IN_PROGRESS"
     return {"id":t.id,"name":t.title,"caseName":c.teaching_title if c else "","instructions":t.instructions,"caseVersionId":t.case_version_id,"startAt":t.start_at,"dueAt":t.due_at,"allowLate":t.allow_late,"status":state,"submissionId":s.id if s else None,"submittedAt":s.submitted_at if s else None,"submissionVersion":f"v{s.version_no}" if s else None}
 @router.get("/tasks")
 def tasks(user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
@@ -48,12 +52,14 @@ def save(db,t,u,p):
 @router.put("/tasks/{task_id}/draft")
 def save_draft(task_id:str,payload:DraftPayload,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
     t=assigned(db,task_id,user); now=datetime.now(UTC)
-    if t.status!="PUBLISHED" or (t.start_at and now<t.start_at) or (t.due_at and now>t.due_at and not t.allow_late): raise HTTPException(409,"Task is not editable")
+    start,due=utc_time(t.start_at),utc_time(t.due_at)
+    if t.status!="PUBLISHED" or (start and now<start) or (due and now>due and not t.allow_late): raise HTTPException(409,"Task is not editable")
     s=save(db,t,user,payload);db.add(AuditLog(action="DRAFT_SAVED",actor_id=user.id,case_version_id=t.case_version_id,detail={"taskId":t.id,"submissionId":s.id}));db.commit();return APIResponse(data=subdata(db,s),request_id=request_id)
 @router.post("/tasks/{task_id}/submissions")
 def submit(task_id:str,payload:DraftPayload,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
     t=assigned(db,task_id,user); now=datetime.now(UTC)
-    if t.status!="PUBLISHED" or (t.start_at and now<t.start_at) or (t.due_at and now>t.due_at and not t.allow_late): raise HTTPException(409,"Task submission is closed")
+    start,due=utc_time(t.start_at),utc_time(t.due_at)
+    if t.status!="PUBLISHED" or (start and now<start) or (due and now>due and not t.allow_late): raise HTTPException(409,"Task submission is closed")
     s=save(db,t,user,payload);s.status="SUBMITTED";s.submitted_at=now;db.add(AuditLog(action="SUBMISSION_CREATED",actor_id=user.id,case_version_id=t.case_version_id,detail={"taskId":t.id,"submissionId":s.id}));db.commit();return APIResponse(data=subdata(db,s),request_id=request_id)
 @router.get("/submissions/{submission_id}")
 def submission(submission_id:str,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
