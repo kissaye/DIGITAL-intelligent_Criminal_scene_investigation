@@ -11,6 +11,7 @@ from app.models.practice import Submission,SubmissionMark,SubmissionMeasurement,
 from app.models.user import User
 from app.schemas.common import APIResponse
 from app.schemas.student import DraftPayload
+from app.services.practice_access import require_open_task
 router=APIRouter(prefix="/student",tags=["student"]); settings=get_settings()
 def utc_time(value):
     if value is None: return None
@@ -33,8 +34,7 @@ def tasks(user:User=Depends(require_student),db:Session=Depends(get_db),request_
 def task(task_id:str,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)): return APIResponse(data=taskdata(db,assigned(db,task_id,user),user),request_id=request_id)
 @router.get("/tasks/{task_id}/workspace")
 def workspace(task_id:str,response:Response,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
-    t=assigned(db,task_id,user); v=db.scalar(select(CaseVersion).where(CaseVersion.id==t.case_version_id))
-    if not v or v.status!="READY" or not v.viewer_manifest_key: raise HTTPException(409,"Workspace viewer is unavailable")
+    t, v, _=require_open_task(db,task_id,user)
     d=student_submission(db,t,user); exp=datetime.now(UTC)+timedelta(minutes=settings.viewer_token_expire_minutes); token=jwt.encode({"sub":str(user.id),"version":v.id,"task":t.id,"exp":exp,"type":"student_viewer"},settings.jwt_secret_key,algorithm=settings.jwt_algorithm)
     response.set_cookie(f"viewer_{v.id}",token,max_age=settings.viewer_token_expire_minutes*60,httponly=True,samesite="lax",path=f"{settings.api_v1_prefix}/viewer-assets/{v.id}")
     db.add(AuditLog(action="TASK_WORKSPACE_OPENED",actor_id=user.id,case_id=v.case_id,case_version_id=v.id,detail={"taskId":t.id}));db.commit()
@@ -51,15 +51,11 @@ def save(db,t,u,p):
     return s
 @router.put("/tasks/{task_id}/draft")
 def save_draft(task_id:str,payload:DraftPayload,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
-    t=assigned(db,task_id,user); now=datetime.now(UTC)
-    start,due=utc_time(t.start_at),utc_time(t.due_at)
-    if t.status!="PUBLISHED" or (start and now<start) or (due and now>due and not t.allow_late): raise HTTPException(409,"Task is not editable")
+    t, _, _=require_open_task(db,task_id,user)
     s=save(db,t,user,payload);db.add(AuditLog(action="DRAFT_SAVED",actor_id=user.id,case_version_id=t.case_version_id,detail={"taskId":t.id,"submissionId":s.id}));db.commit();return APIResponse(data=subdata(db,s),request_id=request_id)
 @router.post("/tasks/{task_id}/submissions")
 def submit(task_id:str,payload:DraftPayload,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
-    t=assigned(db,task_id,user); now=datetime.now(UTC)
-    start,due=utc_time(t.start_at),utc_time(t.due_at)
-    if t.status!="PUBLISHED" or (start and now<start) or (due and now>due and not t.allow_late): raise HTTPException(409,"Task submission is closed")
+    t, _, _=require_open_task(db,task_id,user); now=datetime.now(UTC)
     s=save(db,t,user,payload);s.status="SUBMITTED";s.submitted_at=now;db.add(AuditLog(action="SUBMISSION_CREATED",actor_id=user.id,case_version_id=t.case_version_id,detail={"taskId":t.id,"submissionId":s.id}));db.commit();return APIResponse(data=subdata(db,s),request_id=request_id)
 @router.get("/submissions/{submission_id}")
 def submission(submission_id:str,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):

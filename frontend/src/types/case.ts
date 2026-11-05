@@ -1,4 +1,4 @@
-export type CaseVersionStatus = 'DRAFT' | 'PROCESSING' | 'READY' | 'FAILED'
+export type CaseVersionStatus = 'DRAFT' | 'PROCESSING' | 'READY' | 'PUBLISHED' | 'ARCHIVED' | 'FAILED'
 
 export interface CaseFile {
   id: string

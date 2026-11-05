@@ -30,6 +30,7 @@ class FileData(ApiModel):
 
 class VersionCreate(ApiModel):
     file_id: str = Field(alias="fileId", serialization_alias="fileId")
+    parent_version_id: str | None = Field(default=None, alias="parentVersionId", serialization_alias="parentVersionId")
 
 
 class VersionData(ApiModel):

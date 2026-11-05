@@ -7,6 +7,7 @@ from app.models.case import AuditLog,Case,CaseVersion
 from app.models.practice import Class,ClassMember,Course,Submission,SubmissionMark,SubmissionMeasurement,Task,TaskAssignment
 from app.models.user import User
 from app.schemas.common import APIResponse
+from app.services.publication import require_teaching_version
 router=APIRouter(prefix="/teacher",tags=["teacher"])
 def dt(v): return datetime.fromisoformat(v.replace('Z','+00:00')) if isinstance(v,str) else v
 def classdata(db,x):
@@ -55,11 +56,16 @@ def members(cid:str,p:dict,u:User=Depends(require_teacher),db:Session=Depends(ge
  db.query(ClassMember).filter_by(class_id=cid).delete();[db.add(ClassMember(class_id=cid,user_id=i)) for i in ids];db.commit();return APIResponse(data=classdata(db,x),request_id=request_id)
 @router.get('/case-versions/ready')
 def ready(u:User=Depends(require_teacher),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
- rows=db.scalars(select(CaseVersion).where(CaseVersion.status=='READY')).all();return APIResponse(data=[{"id":v.id,"caseId":v.case_id,"caseName":db.scalar(select(Case.teaching_title).where(Case.id==v.case_id)),"internalCode":db.scalar(select(Case.internal_code).where(Case.id==v.case_id)),"createdAt":v.created_at} for v in rows],request_id=request_id)
+ rows=[]
+ for v in db.scalars(select(CaseVersion).where(CaseVersion.status=='PUBLISHED')).all():
+  try: require_teaching_version(db,v)
+  except HTTPException: continue
+  rows.append({"id":v.id,"caseId":v.case_id,"caseName":db.scalar(select(Case.teaching_title).where(Case.id==v.case_id)),"internalCode":db.scalar(select(Case.internal_code).where(Case.id==v.case_id)),"createdAt":v.created_at})
+ return APIResponse(data=rows,request_id=request_id)
 @router.post('/tasks',status_code=201)
 def create_task(p:dict,u:User=Depends(require_teacher),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
- c=owned_class(db,p['classId'],u);v=db.scalar(select(CaseVersion).where(CaseVersion.id==p['caseVersionId'],CaseVersion.status=='READY'))
- if not v: raise HTTPException(409,'Case version is not READY')
+ c=owned_class(db,p['classId'],u);v=db.scalar(select(CaseVersion).where(CaseVersion.id==p['caseVersionId']))
+ require_teaching_version(db,v)
  start,due=dt(p.get('startAt')),dt(p.get('dueAt'))
  if start and due and due<start: raise HTTPException(422,'dueAt must not precede startAt')
  members=db.scalars(select(ClassMember).where(ClassMember.class_id==c.id)).all()

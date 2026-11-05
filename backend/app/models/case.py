@@ -48,6 +48,7 @@ class File(Base):
 class CaseVersion(Base):
     __tablename__ = "case_versions"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    parent_version_id: Mapped[str | None] = mapped_column(ForeignKey("case_versions.id"), nullable=True)
     case_id: Mapped[str] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), nullable=False, index=True)
     source_file_id: Mapped[str] = mapped_column(ForeignKey("files.id", ondelete="RESTRICT"), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer(), nullable=False)
@@ -87,6 +88,31 @@ class AuditLog(Base):
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     detail: Mapped[dict | None] = mapped_column(JSON(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+class CaseAuthorization(Base):
+    __tablename__="case_authorizations"
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_uuid)
+    case_id: Mapped[str]=mapped_column(ForeignKey("cases.id",ondelete="CASCADE"),nullable=False,index=True)
+    authorization_no: Mapped[str]=mapped_column(String(200),unique=True,nullable=False)
+    scope: Mapped[str]=mapped_column(Text,nullable=False)
+    valid_from: Mapped[datetime|None]=mapped_column(DateTime(timezone=True))
+    valid_until: Mapped[datetime]=mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True))
+    created_by: Mapped[int]=mapped_column(ForeignKey("users.id"),nullable=False)
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+class TeachingCopy(Base):
+    __tablename__="teaching_copies"
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_uuid)
+    case_version_id: Mapped[str]=mapped_column(ForeignKey("case_versions.id"),nullable=False,index=True,unique=True)
+    authorization_id: Mapped[str]=mapped_column(ForeignKey("case_authorizations.id"),nullable=False)
+    manifest_key: Mapped[str]=mapped_column(String(512),nullable=False)
+    checksum_sha256: Mapped[str]=mapped_column(String(64),nullable=False)
+    reviewed_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False)
+    reviewed_by: Mapped[int]=mapped_column(ForeignKey("users.id"),nullable=False)
+    review_note: Mapped[str]=mapped_column(Text,nullable=False)
+    valid_until: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False)
+    published_by: Mapped[int]=mapped_column(ForeignKey("users.id"),nullable=False)
+    published_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
 
 
 class Annotation(Base):

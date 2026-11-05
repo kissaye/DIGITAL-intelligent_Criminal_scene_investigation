@@ -15,6 +15,7 @@ from app.models.case import Annotation, AuditLog, CaseVersion, Measurement
 from app.models.user import User
 from app.schemas.common import APIResponse
 from app.schemas.viewer import AnnotationCreate, AnnotationData, MeasurementCreate, MeasurementData
+from app.services.practice_access import require_open_task
 
 router = APIRouter(tags=["viewer"])
 settings = get_settings()
@@ -22,7 +23,7 @@ settings = get_settings()
 def _ready(db: Session, version_id: str) -> CaseVersion:
     item = db.scalar(select(CaseVersion).where(CaseVersion.id == version_id))
     if item is None: raise HTTPException(404, "Case version not found")
-    if item.status != "READY" or not item.viewer_manifest_key: raise HTTPException(409, "Viewer is unavailable until conversion is READY")
+    if item.status not in {"READY", "PUBLISHED"} or not item.viewer_manifest_key: raise HTTPException(409, "Viewer is unavailable")
     return item
 
 def _annotation(item: Annotation) -> AnnotationData:
@@ -48,10 +49,23 @@ def viewer_asset(version_id: str, asset_path: str, request: Request, db: Annotat
         claims = jwt.decode(token or "", settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         if claims.get("type") not in {"viewer", "student_viewer"} or claims.get("version") != version_id: raise ValueError()
     except Exception: raise HTTPException(401, "Viewer asset credential is invalid or expired")
-    version = _ready(db, version_id)
-    root = (Path(settings.storage_root).resolve() / "cases" / version.case_id / "versions" / version.id / "potree").resolve()
+    version = db.scalar(select(CaseVersion).where(CaseVersion.id == version_id))
+    if version is None: raise HTTPException(404, "Case version not found")
+    if claims.get("type") == "student_viewer":
+        try:
+            student = db.get(User, int(claims["sub"]))
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(401, "Viewer asset credential is invalid")
+        if student is None: raise HTTPException(401, "Viewer asset credential is invalid")
+        _, checked_version, copy = require_open_task(db, claims.get("task"), student, version_id)
+        if checked_version.id != version.id: raise HTTPException(401, "Viewer asset credential is invalid")
+        root = (Path(settings.storage_root).resolve() / copy.manifest_key).resolve().parent
+    else:
+        version = _ready(db, version_id)
+        root = (Path(settings.storage_root).resolve() / "cases" / version.case_id / "versions" / version.id / "potree").resolve()
     target = (root / asset_path).resolve()
     if root not in target.parents and target != root: raise HTTPException(404, "Asset not found")
+    if target.suffix.lower() not in {".json", ".bin"}: raise HTTPException(404, "Asset not found")
     if not target.is_file(): raise HTTPException(404, "Asset not found")
     db.add(AuditLog(action="VIEWER_ASSET_ACCESSED", actor_id=int(claims["sub"]), case_id=version.case_id, case_version_id=version.id, detail={"asset": asset_path}))
     db.commit()

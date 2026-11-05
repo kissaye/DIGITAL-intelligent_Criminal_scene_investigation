@@ -4,6 +4,8 @@ const statusMap: Record<CaseVersionStatus, { text: string; type: 'info' | 'warni
   DRAFT: { text: '草稿', type: 'info' },
   PROCESSING: { text: '处理中', type: 'warning' },
   READY: { text: '已就绪', type: 'success' },
+  PUBLISHED: { text: '已发布', type: 'success' },
+  ARCHIVED: { text: '已归档', type: 'info' },
   FAILED: { text: '失败', type: 'danger' },
 }
 

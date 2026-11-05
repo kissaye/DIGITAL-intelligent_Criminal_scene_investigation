@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.case import AuditLog, CaseVersion, Job
+from app.models.practice import Task
 
 
 def _tool_error(tool_name: str, configured_path: str) -> str | None:
@@ -48,6 +49,10 @@ def run_conversion(job_id: str) -> None:
         if job is None:
             return
         version = job.case_version
+        if version.status in {"PUBLISHED", "ARCHIVED"} or db.scalar(select(Task.id).where(Task.case_version_id == version.id)):
+            job.status, job.error_message, job.finished_at = "FAILED", "Conversion is blocked for published, archived, or assigned versions", datetime.now(UTC)
+            db.add(AuditLog(action="CONVERSION_FAILED", case_id=version.case_id, case_version_id=version.id, job_id=job.id, detail={"error": job.error_message}))
+            return
         job.status, job.progress, job.started_at = "RUNNING", 5, datetime.now(UTC)
         version.status, version.error_message = "PROCESSING", None
 
