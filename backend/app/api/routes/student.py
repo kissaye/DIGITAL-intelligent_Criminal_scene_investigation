@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.common import APIResponse
 from app.schemas.student import DraftPayload
 from app.services.practice_access import require_open_task
+from app.models.case import TeachingCopy
 router=APIRouter(prefix="/student",tags=["student"]); settings=get_settings()
 def utc_time(value):
     if value is None: return None
@@ -34,11 +35,12 @@ def tasks(user:User=Depends(require_student),db:Session=Depends(get_db),request_
 def task(task_id:str,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)): return APIResponse(data=taskdata(db,assigned(db,task_id,user),user),request_id=request_id)
 @router.get("/tasks/{task_id}/workspace")
 def workspace(task_id:str,response:Response,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
-    t, v, _=require_open_task(db,task_id,user)
+    t, v, copy=require_open_task(db,task_id,user)
     d=student_submission(db,t,user); exp=datetime.now(UTC)+timedelta(minutes=settings.viewer_token_expire_minutes); token=jwt.encode({"sub":str(user.id),"version":v.id,"task":t.id,"exp":exp,"type":"student_viewer"},settings.jwt_secret_key,algorithm=settings.jwt_algorithm)
     response.set_cookie(f"viewer_{v.id}",token,max_age=settings.viewer_token_expire_minutes*60,httponly=True,samesite="lax",path=f"{settings.api_v1_prefix}/viewer-assets/{v.id}")
     db.add(AuditLog(action="TASK_WORKSPACE_OPENED",actor_id=user.id,case_id=v.case_id,case_version_id=v.id,detail={"taskId":t.id}));db.commit()
-    return APIResponse(data={"task":taskdata(db,t,user),"draft":subdata(db,d) if d else None,"viewerConfig":{"versionId":v.id,"manifestUrl":f"{settings.api_v1_prefix}/viewer-assets/{v.id}/metadata.json"}},request_id=request_id)
+    forced=[{**r,"enforced":True} for r in copy.desensitization_rules]
+    return APIResponse(data={"task":taskdata(db,t,user),"draft":subdata(db,d) if d else None,"viewerConfig":{"versionId":v.id,"manifestUrl":f"{settings.api_v1_prefix}/viewer-assets/{v.id}/metadata.json","forcedDesensitizationRules":forced}},request_id=request_id)
 def subdata(db,s):
     return {"id":s.id,"status":s.status,"reportContent":s.report_content,"marks":[{"id":x.id,"geometry":x.geometry,"title":x.title,"description":x.description,"viewerState":x.viewer_state} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],"measurements":[{"id":x.id,"startPoint":x.start_point,"endPoint":x.end_point,"distance":x.distance,"viewerState":x.viewer_state} for x in db.scalars(select(SubmissionMeasurement).where(SubmissionMeasurement.submission_id==s.id))],"submittedAt":s.submitted_at,"version":f"v{s.version_no}"}
 def save(db,t,u,p):

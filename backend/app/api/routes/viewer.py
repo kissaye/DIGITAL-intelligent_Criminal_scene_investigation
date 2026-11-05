@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_request_id, require_admin
 from app.core.config import get_settings
-from app.models.case import Annotation, AuditLog, CaseVersion, Measurement
+from app.models.case import Annotation, AuditLog, CaseVersion, DesensitizationRule, Measurement, TeachingCopy
 from app.models.user import User
 from app.schemas.common import APIResponse
 from app.schemas.viewer import AnnotationCreate, AnnotationData, MeasurementCreate, MeasurementData
@@ -40,7 +40,16 @@ def viewer_config(version_id: str, response: Response, admin: Annotated[User, De
     response.set_cookie(f"viewer_{version_id}", token, max_age=settings.viewer_token_expire_minutes * 60, httponly=True, samesite="lax", path=f"{settings.api_v1_prefix}/viewer-assets/{version_id}")
     db.add(AuditLog(action="VIEWER_OPENED", actor_id=admin.id, case_id=version.case_id, case_version_id=version.id))
     db.commit()
-    return APIResponse(data={"versionId": version.id, "manifestUrl": f"{settings.api_v1_prefix}/viewer-assets/{version.id}/metadata.json", "initialCamera": {}, "pointBudget": 1000000, "capabilities": {"annotations": True, "measurements": True}}, request_id=request_id)
+    copy=db.scalar(select(TeachingCopy).where(TeachingCopy.case_version_id==version.id))
+    if copy:
+        rule_snapshots = copy.desensitization_rules
+    else:
+        rule_snapshots = [
+            {"id": rule.id, "mode": rule.mode, "geometry": rule.geometry, "title": rule.title, "description": rule.description or ""}
+            for rule in db.scalars(select(DesensitizationRule).where(DesensitizationRule.case_version_id == version.id, DesensitizationRule.mode == "HIDE", DesensitizationRule.status == "APPLIED")).all()
+        ]
+    rules=[{**rule,"enforced":False,"preview":True} for rule in rule_snapshots]
+    return APIResponse(data={"versionId": version.id, "manifestUrl": f"{settings.api_v1_prefix}/viewer-assets/{version.id}/metadata.json", "initialCamera": {}, "pointBudget": 1000000, "capabilities": {"annotations": True, "measurements": True}, "forcedDesensitizationRules":rules}, request_id=request_id)
 
 @router.get("/viewer-assets/{version_id}/{asset_path:path}")
 def viewer_asset(version_id: str, asset_path: str, request: Request, db: Annotated[Session, Depends(get_db)]):

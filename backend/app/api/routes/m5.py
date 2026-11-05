@@ -10,7 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_request_id, require_admin
 from app.core.config import get_settings
-from app.models.case import AuditLog, Case, CaseAuthorization, CaseVersion, TeachingCopy
+from app.models.case import AuditLog, Case, CaseAuthorization, CaseVersion, DesensitizationRule, TeachingCopy
 from app.models.user import User
 from app.schemas.common import APIResponse
 from app.services.publication import utc
@@ -96,6 +96,8 @@ def publish(version_id: str, payload: PublicationInput, admin: User = Depends(re
     version = db.scalar(select(CaseVersion).where(CaseVersion.id == version_id).with_for_update())
     if version is None: raise HTTPException(404, "Version not found")
     if version.status != "READY" or db.scalar(select(TeachingCopy).where(TeachingCopy.case_version_id == version.id)): raise HTTPException(409, "Only unpublished READY versions can be published")
+    pending_rules=db.scalar(select(DesensitizationRule.id).where(DesensitizationRule.case_version_id==version.id,DesensitizationRule.status!="APPLIED"))
+    if pending_rules: raise HTTPException(409,"All desensitization rules must be applied before publication")
     case = case_or_404(db, version.case_id)
     authorization = db.scalar(select(CaseAuthorization).where(CaseAuthorization.id == payload.authorization_id, CaseAuthorization.case_id == version.case_id).with_for_update())
     now, valid_until = datetime.now(UTC), payload.valid_until.astimezone(UTC)
@@ -107,7 +109,8 @@ def publish(version_id: str, payload: PublicationInput, admin: User = Depends(re
     try:
         shutil.copytree(source, destination)
         manifest = destination / "metadata.json"
-        copy = TeachingCopy(case_version_id=version.id, authorization_id=authorization.id, manifest_key=manifest.relative_to(root).as_posix(), checksum_sha256=copy_checksum(destination), reviewed_at=now, reviewed_by=admin.id, review_note=payload.review_note, valid_until=valid_until, published_by=admin.id)
+        hide_rules=[{"id":r.id,"mode":r.mode,"geometry":r.geometry,"title":r.title,"description":r.description} for r in db.scalars(select(DesensitizationRule).where(DesensitizationRule.case_version_id==version.id,DesensitizationRule.mode=="HIDE",DesensitizationRule.status=="APPLIED")).all()]
+        copy = TeachingCopy(case_version_id=version.id, authorization_id=authorization.id, manifest_key=manifest.relative_to(root).as_posix(), checksum_sha256=copy_checksum(destination), reviewed_at=now, reviewed_by=admin.id, review_note=payload.review_note, valid_until=valid_until, published_by=admin.id,desensitization_rules=hide_rules)
         db.add(copy); version.status = "PUBLISHED"; db.add(AuditLog(action="VERSION_PUBLISHED", actor_id=admin.id, case_id=version.case_id, case_version_id=version.id, detail={"authorizationId": authorization.id, "checksum": copy.checksum_sha256})); db.commit(); db.refresh(copy)
     except Exception:
         db.rollback()

@@ -9,10 +9,16 @@ const write = <T>(versionId: string, kind: string, value: T[]) => localStorage.s
 const id = (prefix: string) => `${prefix}-${Date.now()}`
 
 export async function getViewerConfig(versionId: string): Promise<ViewerConfig> {
-  if (!useMock) return responseData<ViewerConfig>(await http.get(`/api/v1/case-versions/${versionId}/viewer-config`))
+  if (!useMock) {
+    const body = responseData<unknown>(await http.get(`/api/v1/case-versions/${versionId}/viewer-config`))
+    const value = body && typeof body === 'object' ? body as Record<string, unknown> : {}
+    const manifestUrl = typeof value.manifestUrl === 'string' ? value.manifestUrl : typeof value.manifest_url === 'string' ? value.manifest_url : ''
+    const rules = Array.isArray(value.forcedDesensitizationRules) ? value.forcedDesensitizationRules : []
+    return { manifestUrl, forcedDesensitizationRules: rules.filter((item): item is ViewerConfig['forcedDesensitizationRules'][number] => Boolean(item && typeof item === 'object')) }
+  }
   await wait()
   // Mock 不伪造三维点云资源；iframe 只显示明确的模拟模式说明。
-  return { manifestUrl: '' }
+  return { manifestUrl: '', forcedDesensitizationRules: [] }
 }
 
 export async function getAnnotations(versionId: string): Promise<Annotation[]> {

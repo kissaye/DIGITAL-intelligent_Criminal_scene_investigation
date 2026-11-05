@@ -15,7 +15,8 @@ async function loadDetail(silent = false) {
   try {
     const current = await getCase(String(route.params.caseId))
     if (current.latestVersion?.jobId && current.latestVersion.status === 'PROCESSING') await getJob(current.latestVersion.jobId)
-    if (current.latestVersion) current.latestVersion = await getCaseVersion(current.latestVersion.id)
+    const requestedVersion = typeof route.query.versionId === 'string' ? route.query.versionId : current.latestVersion?.id
+    if (requestedVersion) current.latestVersion = await getCaseVersion(requestedVersion)
     record.value = current
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '案例详情加载失败') }
   finally { loading.value = false }
@@ -28,7 +29,7 @@ onBeforeUnmount(() => { if (timer.value) window.clearInterval(timer.value) })
 
 <template>
   <main class="page-shell">
-    <div class="page-header"><div><p class="eyebrow">管理员 / 案例管理</p><h1>{{ record?.teachingTitle || '案例详情' }}</h1><p class="page-description">案例与转换版本信息</p></div><div class="header-actions"><el-button @click="router.push('/admin/cases')">返回列表</el-button><el-button @click="router.push(`/admin/cases/${route.params.caseId}/publication`)">发布与审计</el-button><el-button type="primary" :loading="loading" @click="refresh">重新查询状态</el-button></div></div>
+    <div class="page-header"><div><p class="eyebrow">管理员 / 案例管理</p><h1>{{ record?.teachingTitle || '案例详情' }}</h1><p class="page-description">案例与转换版本信息</p></div><div class="header-actions"><el-button @click="router.push('/admin/cases')">返回列表</el-button><el-button @click="router.push(`/admin/cases/${route.params.caseId}/publication`)">发布与审计</el-button><el-button v-if="version" @click="router.push(`/admin/cases/${record?.id}/versions/${version.id}/desensitization`)">脱敏处理</el-button><el-button type="primary" :loading="loading" @click="refresh">重新查询状态</el-button></div></div>
     <el-skeleton v-if="loading && !record" :rows="8" animated />
     <template v-else-if="record">
       <el-card shadow="never" class="card"><template #header><div class="card-title">基本信息 <el-tag :type="statusMeta(version?.status).type">{{ statusMeta(version?.status).text }}</el-tag></div></template><el-descriptions :column="2" border><el-descriptions-item label="内部案例编号">{{ record.internalCode }}</el-descriptions-item><el-descriptions-item label="案例类型">{{ record.caseType }}</el-descriptions-item><el-descriptions-item label="教学难度">{{ record.difficulty }}</el-descriptions-item><el-descriptions-item label="课程标签"><el-tag v-for="tag in record.courseTags" :key="tag" class="tag">{{ tag }}</el-tag></el-descriptions-item><el-descriptions-item label="有效期">{{ record.validUntil || '长期有效' }}</el-descriptions-item><el-descriptions-item label="脱敏等级">{{ record.desensitizationLevel }}</el-descriptions-item><el-descriptions-item label="文件信息" :span="2">{{ record.file?.fileName || '尚未上传' }} <span class="muted">{{ formatBytes(record.file?.fileSize) }}</span></el-descriptions-item><el-descriptions-item label="创建时间" :span="2">{{ formatDate(record.createdAt) }}</el-descriptions-item></el-descriptions></el-card>

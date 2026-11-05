@@ -11,6 +11,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/admin/cases/new', name: 'admin-case-new', component: () => import('@/views/CaseCreateView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
   { path: '/admin/cases/:caseId', name: 'admin-case-detail', component: () => import('@/views/CaseDetailView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
   { path: '/admin/cases/:caseId/publication', name: 'admin-case-publication', component: () => import('@/views/CasePublicationView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
+  { path: '/admin/cases/:caseId/versions/:versionId/desensitization', name: 'admin-case-desensitization', component: () => import('@/views/DesensitizationView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
   { path: '/admin/cases/:caseId/viewer', name: 'admin-case-viewer', component: () => import('@/views/CaseViewerView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
   { path: '/teacher', name: 'teacher', component: () => import('@/views/HomeView.vue'), meta: { requiresAuth: true, roles: ['TEACHER'] } },
   { path: '/teacher/courses', name: 'teacher-courses', component: () => import('@/views/TeacherCoursesView.vue'), meta: { requiresAuth: true, roles: ['TEACHER'] } },

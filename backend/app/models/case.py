@@ -113,6 +113,20 @@ class TeachingCopy(Base):
     valid_until: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False)
     published_by: Mapped[int]=mapped_column(ForeignKey("users.id"),nullable=False)
     published_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+    desensitization_rules: Mapped[list]=mapped_column(JSON(),nullable=False,default=list)
+
+class DesensitizationRule(Base):
+    __tablename__="desensitization_rules"
+    id: Mapped[str]=mapped_column(String(36),primary_key=True,default=new_uuid)
+    case_version_id: Mapped[str]=mapped_column(ForeignKey("case_versions.id",ondelete="CASCADE"),nullable=False,index=True)
+    created_by: Mapped[int]=mapped_column(ForeignKey("users.id"),nullable=False)
+    mode: Mapped[str]=mapped_column(String(10),nullable=False)
+    geometry: Mapped[dict]=mapped_column(JSON(),nullable=False)
+    title: Mapped[str]=mapped_column(String(200),nullable=False)
+    description: Mapped[str|None]=mapped_column(Text(),nullable=True)
+    status: Mapped[str]=mapped_column(String(10),nullable=False,default="DRAFT")
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+    updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now(),onupdate=func.now())
 
 
 class Annotation(Base):
