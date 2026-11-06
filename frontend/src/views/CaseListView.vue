@@ -1,48 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import { Search, Refresh } from '@element-plus/icons-vue'
+import BusinessShell from '@/components/BusinessShell.vue'
+import ScrollReveal from '@/components/ScrollReveal.vue'
 import { getCases } from '@/api/cases'
 import type { CaseRecord } from '@/types/case'
 import { formatBounds, formatBytes, formatDate, statusMeta } from '@/utils/case'
-
-const loading = ref(false)
-const records = ref<CaseRecord[]>([])
-
-async function loadCases() {
-  loading.value = true
-  try { records.value = (await getCases()).items }
-  catch (error) { ElMessage.error(error instanceof Error ? error.message : '案例列表加载失败') }
-  finally { loading.value = false }
-}
-
+const loading=ref(false),records=ref<CaseRecord[]>([]),error=ref(''),search=ref(''),status=ref('')
+const filtered=computed(()=>records.value.filter(row=>(!search.value||`${row.teachingTitle} ${row.internalCode}`.toLowerCase().includes(search.value.toLowerCase()))&&(!status.value||(row.latestVersion?.status||'DRAFT')===status.value)))
+async function loadCases(){loading.value=true;error.value='';try{records.value=(await getCases()).items}catch(e){error.value=e instanceof Error?e.message:'案例列表加载失败，请稍后重试。'}finally{loading.value=false}}
 onMounted(loadCases)
 </script>
-
-<template>
-  <main class="page-shell">
-    <div class="page-header">
-      <div><p class="eyebrow">管理员 / 案例管理</p><h1>案例导入与转换</h1><p class="page-description">创建教学案例并导入 LAS 或 LAZ 文件，跟踪转换处理状态。</p></div>
-      <div class="header-actions"><el-button @click="loadCases">刷新</el-button><el-button type="primary" @click="$router.push('/admin/cases/new')">创建案例</el-button></div>
-    </div>
-    <el-card shadow="never">
-      <el-table v-loading="loading" :data="records" row-key="id" min-width="1200">
-        <el-table-column label="教学标题" min-width="190"><template #default="{ row }"><strong>{{ row.teachingTitle }}</strong><div class="subtext">{{ row.caseType }} · {{ row.difficulty }}</div></template></el-table-column>
-        <el-table-column prop="internalCode" label="案例编号" min-width="140" />
-        <el-table-column label="文件" min-width="180"><template #default="{ row }"><span>{{ row.file?.fileName || '尚未上传' }}</span><div class="subtext">{{ formatBytes(row.file?.fileSize) }}</div></template></el-table-column>
-        <el-table-column label="版本状态" width="110"><template #default="{ row }"><el-tag :type="statusMeta(row.latestVersion?.status).type">{{ statusMeta(row.latestVersion?.status).text }}</el-tag></template></el-table-column>
-        <el-table-column label="点数 / 边界范围" min-width="260"><template #default="{ row }"><div>{{ row.latestVersion?.pointCount?.toLocaleString() || '-' }}</div><div class="subtext">{{ formatBounds(row.latestVersion?.bounds) }}</div></template></el-table-column>
-        <el-table-column label="创建时间" width="170"><template #default="{ row }">{{ formatDate(row.createdAt) }}</template></el-table-column>
-        <el-table-column label="失败原因" min-width="150"><template #default="{ row }"><span class="failure">{{ row.latestVersion?.failureReason || '-' }}</span></template></el-table-column>
-        <el-table-column label="操作" fixed="right" width="100"><template #default="{ row }"><el-button link type="primary" @click="$router.push(`/admin/cases/${row.id}`)">查看详情</el-button></template></el-table-column>
-      </el-table>
-      <el-empty v-if="!loading && records.length === 0" description="暂无案例，请先创建案例" />
-    </el-card>
-  </main>
-</template>
-
+<template><BusinessShell><main class="cases-page"><ScrollReveal immediate><header class="page-heading"><div><p class="eyebrow">案例资源 / 管理员</p><h1>案例。</h1><p class="description">准备、转换与复核。每一个教学现场，从这里开始。</p></div><el-button type="primary" size="large" @click="$router.push('/admin/cases/new')">导入案例</el-button></header></ScrollReveal><ScrollReveal :delay="70" immediate><section class="case-surface" aria-label="案例列表"><div class="filters"><el-input v-model="search" clearable :prefix-icon="Search" placeholder="搜索标题或案例编号" aria-label="搜索案例"/><el-select v-model="status" clearable placeholder="所有状态" aria-label="按状态筛选"><el-option v-for="s in ['DRAFT','PROCESSING','READY','PUBLISHED','ARCHIVED','FAILED']" :key="s" :label="statusMeta(s as any).text" :value="s"/></el-select><el-button text :icon="Refresh" :loading="loading" @click="loadCases">刷新</el-button></div><el-alert v-if="error" :title="error" type="error" :closable="false" show-icon/><el-table v-loading="loading" :data="filtered" row-key="id" class="case-table" :empty-text="error?'加载失败，请重试':'暂无匹配案例'"><el-table-column label="案例" min-width="220"><template #default="{row}"><button class="case-title" @click="$router.push(`/admin/cases/${row.id}`)">{{row.teachingTitle}}</button><div class="secondary">{{row.internalCode}} · {{row.caseType}} / {{row.difficulty}}</div><div v-if="row.latestVersion?.failureReason" class="failure">{{row.latestVersion.failureReason}}</div></template></el-table-column><el-table-column label="版本状态" min-width="100"><template #default="{row}"><el-tag size="small" :type="statusMeta(row.latestVersion?.status).type">{{statusMeta(row.latestVersion?.status).text}}</el-tag></template></el-table-column><el-table-column label="文件" min-width="160"><template #default="{row}"><div class="file-name">{{row.file?.fileName||'尚未上传'}}</div><div class="secondary">{{formatBytes(row.file?.fileSize)}}</div></template></el-table-column><el-table-column label="点数" min-width="105"><template #default="{row}">{{row.latestVersion?.pointCount?.toLocaleString()||'—'}}</template></el-table-column><el-table-column label="空间范围" min-width="190"><template #default="{row}"><span class="secondary">{{formatBounds(row.latestVersion?.bounds)}}</span></template></el-table-column><el-table-column label="创建时间" min-width="150"><template #default="{row}"><span class="secondary">{{formatDate(row.createdAt)}}</span></template></el-table-column><el-table-column label="" width="90"><template #default="{row}"><el-button link type="primary" @click="$router.push(`/admin/cases/${row.id}`)">查看详情</el-button></template></el-table-column></el-table><p class="table-note">{{error?'请检查连接后重新加载。':loading?'正在读取案例…':`共 ${filtered.length} 个案例`}}</p></section></ScrollReveal></main></BusinessShell></template>
 <style scoped>
-.page-shell { max-width: 1440px; min-height: 100vh; margin: 0 auto; padding: 36px 32px; }
-.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; }.header-actions { display: flex; flex: none; gap: 12px; }
-.eyebrow { margin: 0 0 8px; color: #6b7b91; font-size: 13px; }h1 { margin: 0; color: #142d4d; font-size: 27px; }.page-description { margin: 10px 0 0; color: #718096; }.subtext { margin-top: 5px; color: #8491a3; font-size: 12px; line-height: 1.35; }.failure { color: #c45656; }
-@media (max-width: 720px) { .page-shell { padding: 24px 16px; }.page-header { flex-direction: column; }.header-actions { width: 100%; }.header-actions .el-button { flex: 1; } }
+.page-heading{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:42px}.eyebrow{font-size:12px;color:#6e6e73;letter-spacing:.06em}h1{font-size:42px;letter-spacing:-.04em;margin:14px 0}.description{color:#6e6e73;font-size:15px;line-height:1.6}.case-surface{background:#fff;border-radius:20px;overflow:hidden;min-width:0}.filters{display:flex;gap:14px;align-items:center;padding:24px;border-bottom:1px solid #00000008}.filters .el-input{max-width:330px}.filters .el-select{width:150px}.filters>.el-button{margin-left:auto}.case-title{padding:0;border:0;background:none;color:#1d1d1f;font-size:15px;font-weight:600;text-align:left;cursor:pointer}.case-title:hover{color:#0071e3}.secondary{margin-top:7px;color:#6e6e73;font-size:12px;line-height:1.6}.file-name{font-size:13px;overflow-wrap:anywhere}.failure{font-size:12px;color:#c4352c;margin-top:8px}.table-note{padding:10px 24px 20px;color:#86868b;font-size:12px}.case-table{width:100%}:deep(.case-table .el-table__cell){padding:22px 0}:deep(.case-table .cell){padding:0 20px;overflow-wrap:anywhere}:deep(.case-table .el-table__inner-wrapper:before){display:none}@media(max-width:700px){.page-heading{align-items:flex-start;flex-direction:column}.filters{flex-wrap:wrap;padding:18px}.filters .el-input{max-width:100%;flex:1 1 100%}.filters .el-select{flex:1}.case-title{font-size:14px}}
+.case-table :deep(.el-button.is-link){background:transparent!important;color:#0071e3}
+.case-table :deep(.el-table__cell:last-child .cell){padding-inline:10px}
 </style>

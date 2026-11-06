@@ -1,4 +1,43 @@
-:root { font-family: Inter, "Microsoft YaHei", Arial, sans-serif; color: #172033; background: #f4f7fb; }
+:root {
+  --app-bg: #f5f5f7;
+  --surface: #fff;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --accent: #0071e3;
+  --success: #34c759;
+  --warning: #ff9f0a;
+  --danger: #ff3b30;
+  --radius-sm: 11px;
+  --radius-md: 20px;
+  --radius-lg: 26px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--text-primary);
+  background: var(--app-bg);
+}
+
 * { box-sizing: border-box; }
-body { min-width: 320px; min-height: 100vh; margin: 0; }
-button, input { font: inherit; }
+body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--app-bg); }
+button, input, textarea { font: inherit; }
+button:focus-visible, a:focus-visible, .el-button:focus-visible, .el-input__wrapper:focus-within { outline: 3px solid rgb(0 113 227 / 28%); outline-offset: 2px; }
+
+.app-shell { display: flex; min-height: 100vh; background: var(--app-bg); }
+.side-nav { position: sticky; top: 16px; display: flex; flex-direction: column; flex: 0 0 244px; width: 244px; height: calc(100vh - 32px); margin: 16px; border: 1px solid rgb(0 0 0 / 6%); border-radius: var(--radius-lg); background: rgb(255 255 255 / 88%); box-shadow: 0 8px 28px rgb(20 20 30 / 5%); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); transition: width .2s, flex-basis .2s; z-index: 2; }
+.app-shell.collapsed .side-nav { flex-basis: 72px; width: 72px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 22px; border: 0; background: transparent; color: var(--text-primary); text-align: left; font-size: 16px; font-weight: 650; cursor: pointer; }
+.brand small, .account small { display: block; margin-top: 3px; color: var(--text-secondary); font-size: 9px; font-weight: 500; letter-spacing: .06em; }
+.brand-mark { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border-radius: var(--radius-sm); background: var(--accent); color: #fff; font-size: 11px; }
+.side-nav nav { padding: 4px 12px; }
+.side-nav nav button { display: flex; align-items: center; width: 100%; gap: 10px; margin: 3px 0; padding: 11px 12px; border: 0; border-radius: 12px; background: transparent; color: var(--text-secondary); text-align: left; font-size: 14px; cursor: pointer; transition: background .2s, color .2s; }
+.side-nav nav button:hover, .side-nav nav button.active { background: #e8f3ff; color: var(--accent); }
+.nav-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .7; }
+.account { display: flex; align-items: center; gap: 9px; margin: auto 12px 12px; padding: 12px; border-top: 1px solid rgb(0 0 0 / 6%); font-size: 12px; }
+.account b { font-weight: 600; }.avatar { display: grid; flex: 0 0 30px; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: #e8f3ff; color: var(--accent); font-weight: 700; }.logout { margin-left: auto; color: var(--text-secondary); }.collapse { position: absolute; right: -13px; top: 76px; width: 27px; height: 27px; border: 1px solid rgb(0 0 0 / 7%); border-radius: 50%; background: var(--surface); box-shadow: 0 3px 10px rgb(0 0 0 / 8%); }
+.app-shell.collapsed .brand-copy, .app-shell.collapsed .nav-label, .app-shell.collapsed .account-copy, .app-shell.collapsed .logout { display: none; }.app-shell.collapsed .brand, .app-shell.collapsed .account { justify-content: center; padding-inline: 12px; }
+.app-main { width: calc(100% - 276px); min-width: 0; }.app-shell.collapsed .app-main { width: calc(100% - 104px); }.topbar { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 42px; border-bottom: 1px solid rgb(0 0 0 / 4%); background: rgb(245 245 247 / 82%); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); z-index: 1; }.topbar strong { font-size: 14px; }.topbar-note { color: var(--text-secondary); font-size: 12px; }.content { max-width: 1600px; margin: auto; }
+
+.app-main .page-shell, .app-main .page { min-height: auto; padding: 48px 46px !important; background: transparent !important; }.app-main .page-header, .app-main .head { flex-wrap: wrap; gap: 16px; margin-bottom: 34px !important; }.app-main .eyebrow { color: var(--accent) !important; font-size: 12px !important; font-weight: 650; letter-spacing: .06em; }.app-main h1 { color: var(--text-primary) !important; font-size: clamp(28px, 3vw, 38px) !important; letter-spacing: -.035em; }.app-main .page-description { max-width: 620px; color: var(--text-secondary) !important; font-size: 15px !important; line-height: 1.55; }
+.el-card { border: 1px solid rgb(0 0 0 / 6%) !important; border-radius: var(--radius-md) !important; background: var(--surface) !important; box-shadow: 0 2px 12px rgb(0 0 0 / 2.5%) !important; transition: transform .2s, box-shadow .2s; }.el-card:hover { box-shadow: 0 10px 28px rgb(0 0 0 / 5.5%) !important; }.el-button { border-radius: var(--radius-sm) !important; font-weight: 500; }.el-button--primary { background: var(--accent) !important; border-color: var(--accent) !important; }.el-input__wrapper, .el-select__wrapper, .el-textarea__inner, .el-date-editor.el-input__wrapper { border-radius: 12px !important; box-shadow: 0 0 0 1px rgb(0 0 0 / 8%) inset !important; }.el-tag { border-radius: 999px !important; }.el-table { --el-table-border-color: rgb(0 0 0 / 6%) !important; --el-table-header-bg-color: #fafafa !important; border-radius: 18px; overflow: hidden; }.el-table th.el-table__cell { color: var(--text-secondary); font-size: 12px; font-weight: 600; }.el-table .el-table__cell { padding: 15px 0; }.el-dialog, .el-drawer { border-radius: var(--radius-md) !important; }.el-empty { padding: 44px 0 !important; color: var(--text-secondary); }
+
+@media (max-width: 900px) { .side-nav { position: fixed; bottom: 12px; left: 12px; top: auto; width: calc(100% - 24px); height: 64px; margin: 0; border-radius: 18px; }.brand, .account, .collapse { display: none; }.side-nav nav { display: flex; width: 100%; padding: 7px; }.side-nav nav button { justify-content: center; padding: 9px; font-size: 12px; }.app-main, .app-shell.collapsed .app-main { width: 100%; padding-bottom: 82px; }.topbar { padding: 0 20px; }.app-main .page-shell, .app-main .page { padding: 32px 20px !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+@supports not (backdrop-filter: blur(1px)) { .side-nav, .topbar { background: #fff; } }

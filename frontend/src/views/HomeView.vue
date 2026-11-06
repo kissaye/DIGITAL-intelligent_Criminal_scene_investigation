@@ -1,45 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { DocumentAdd, FolderOpened, Reading, Tickets, Collection, EditPen } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { roleLabel } from '@/utils/auth'
-
-const router = useRouter()
-const auth = useAuthStore()
-const user = computed(() => auth.user)
-const roles = computed(() => roleLabel(user.value?.roles))
-const isAdmin = computed(() => user.value?.roles.includes('ADMIN'))
-const isStudent = computed(() => user.value?.roles.includes('STUDENT'))
-const isTeacher = computed(() => user.value?.roles.includes('TEACHER'))
-
-async function logout() {
-  auth.clear()
-  await router.replace('/login')
-}
+const router=useRouter(),auth=useAuthStore(),roles=computed(()=>auth.user?.roles||[]),name=computed(()=>auth.user?.displayName||auth.user?.username||'同事'),mock=import.meta.env.VITE_USE_MOCK!=='false'
+const kind=computed(()=>roles.value.includes('ADMIN')?'admin':roles.value.includes('TEACHER')?'teacher':'student')
+const data=computed(()=>kind.value==='admin'?{lead:'管理每一个可信的教学现场。',desc:'从案例导入、脱敏复核到版本发布，保持流程清晰、安全、可追溯。',main:['案例管理','/admin/cases'],cards:[['案例管理','查看已有案例与点云转换状态','/admin/cases',FolderOpened],['新建案例','开始一次受控的案例导入','/admin/cases/new',DocumentAdd],['发布与审计','在案例详情中管理授权与教学版本','/admin/cases',Collection]]}:kind.value==='teacher'?{lead:'让每次实训都有清晰的成长路径。',desc:'组织课程、班级与任务，简洁地查看学生提交和基础评分。',main:['课程与班级','/teacher/courses'],cards:[['课程与班级','组织学生与教学单元','/teacher/courses',Reading],['实训任务','创建并跟踪教学任务','/teacher/tasks',Tickets],['提交与评分','在任务中查看学生提交并评分','/teacher/tasks',EditPen]]}:{lead:'从观察开始，完成一次专业勘验。',desc:'在受控教学场景中浏览、标记、记录并提交你的实训成果。',main:['我的实训','/student/tasks'],cards:[['我的实训','进入待完成的实训工作台','/student/tasks',Tickets],['草稿与提交','实训过程中自动保存，提交后可回看','/student/tasks',EditPen]]})
+function scrollToFeatures(){document.getElementById('features')?.scrollIntoView({behavior:'smooth'})}
 </script>
-
-<template>
-  <main class="home-page">
-    <el-card class="home-card">
-      <div class="topline">
-        <div><p class="eyebrow">数智刑勘平台</p><h1>{{ roles }}首页</h1></div>
-        <el-button plain @click="logout">退出登录</el-button>
-      </div>
-      <el-divider />
-      <p>当前用户：<strong>{{ user?.displayName || user?.username }}</strong></p>
-      <p>当前角色：<el-tag type="primary">{{ roles }}</el-tag></p>
-      <el-button v-if="isAdmin" type="primary" @click="router.push('/admin/cases')">案例管理</el-button>
-      <el-button v-if="isStudent" type="primary" @click="router.push('/student/tasks')">我的实训任务</el-button>
-      <el-button v-if="isTeacher" type="primary" @click="router.push('/teacher/courses')">教学管理</el-button>
-      <el-empty description="模块开发中" :image-size="100" />
-    </el-card>
-  </main>
-</template>
-
-<style scoped>
-.home-page { min-height: 100vh; padding: 48px 24px; background: #f4f7fb; }
-.home-card { max-width: 760px; margin: 0 auto; }
-.topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.eyebrow { margin: 0 0 8px; color: #6b7b91; font-size: 13px; }
-h1 { margin: 0; color: #142d4d; font-size: 25px; }
-</style>
+<template><main class="home"><section class="hero"><p class="eyebrow">数智刑勘 · {{roleLabel(roles)}}</p><h1>你好，{{name}}。<br>{{data.lead}}</h1><p>{{data.desc}}</p><div class="hero-actions"><el-button type="primary" size="large" @click="router.push(data.main[1])">{{data.main[0]}}</el-button><el-button size="large" @click="scrollToFeatures">查看功能</el-button></div></section><section v-if="mock" class="demo-note"><el-tag type="warning">演示数据</el-tag><span>当前为 Mock 模式，业务数据仅用于流程演示。</span></section><section id="features"><div class="section-title"><h2>核心入口</h2><span>选择一项工作继续</span></div><div class="feature-grid"><button v-for="card in data.cards" :key="String(card[0])" @click="router.push(String(card[2]))"><el-icon><component :is="card[3]"/></el-icon><h3>{{card[0]}}</h3><p>{{card[1]}}</p><span>进入功能</span></button></div></section><section class="activity"><div class="section-title"><h2>最近活动</h2><span>暂无最近活动</span></div><el-empty description="暂无最近活动" :image-size="72"/></section></main></template>
+<style scoped>.home{max-width:1320px;margin:auto;padding:72px 46px}.hero{max-width:780px}.hero h1{margin:10px 0 20px;font-size:clamp(40px,5vw,58px)!important;line-height:1.09}.hero>p:not(.eyebrow){max-width:620px;color:#6e6e73;font-size:18px;line-height:1.6}.hero-actions{display:flex;gap:10px;margin-top:28px}.demo-note{display:flex;gap:10px;align-items:center;margin:46px 0;padding:14px 16px;border:1px solid rgba(255,159,10,.22);border-radius:16px;background:#fffaf0;color:#6e6e73;font-size:13px}.section-title{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}.section-title h2{margin:0;font-size:23px;letter-spacing:-.025em}.section-title span{color:#6e6e73;font-size:13px}.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.feature-grid button,.activity{border:1px solid rgba(0,0,0,.06);border-radius:24px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.025)}.feature-grid button{min-height:220px;padding:27px;border:1px solid rgba(0,0,0,.06);text-align:left;cursor:pointer;transition:transform .2s,box-shadow .2s}.feature-grid button:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(0,0,0,.07)}.feature-grid .el-icon{float:right;color:#0071e3;font-size:24px}.feature-grid h3{margin:62px 0 8px;font-size:21px}.feature-grid p{margin:0;color:#6e6e73;line-height:1.5}.feature-grid span{display:block;margin-top:18px;color:#0071e3;font-size:13px}.activity{margin-top:54px;padding:24px}@media(max-width:900px){.home{padding:45px 20px}.feature-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.feature-grid{grid-template-columns:1fr}.section-title{align-items:flex-start;flex-direction:column;gap:5px}}</style>
