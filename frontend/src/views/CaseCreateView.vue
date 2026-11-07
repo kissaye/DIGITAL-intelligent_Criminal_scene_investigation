@@ -8,6 +8,8 @@ import { formatBytes } from '@/utils/case'
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const creating = ref(false)
+const stage = ref(0)
+const failure = ref('')
 const selectedFile = ref<File | null>(null)
 const fileList = ref<UploadUserFile[]>([])
 const maxFileSize = 2 * 1024 * 1024 * 1024
@@ -20,6 +22,7 @@ function selectFile(uploadFile: UploadFile) {
   const extension = file.name.split('.').pop()?.toLowerCase()
   if (!['las', 'laz'].includes(extension || '')) { ElMessage.error('仅支持上传 .las 或 .laz 点云文件'); removeFile(); return }
   if (file.size > maxFileSize) { ElMessage.error('文件超过 2 GB，请压缩或联系管理员后重试'); removeFile(); return }
+  stage.value = 1
   selectedFile.value = file
   fileList.value = [{ name: file.name, size: file.size, status: 'ready', uid: Date.now() }]
 }
@@ -27,18 +30,23 @@ function selectFile(uploadFile: UploadFile) {
 function removeFile() { selectedFile.value = null; fileList.value = [] }
 
 async function submit() {
+  if (creating.value) return
+  failure.value = ''
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   if (!selectedFile.value) { ElMessage.warning('请选择需要上传的 LAS 或 LAZ 文件'); return }
   creating.value = true
   try {
     const record = await createCase(form.value)
+    stage.value = 1
     const uploadedFile = await uploadCaseFile(record.id, selectedFile.value)
+    stage.value = 2
     await createCaseVersion(record.id, uploadedFile.id)
     ElMessage.success('案例已创建，正在进行转换处理')
     await router.replace(`/admin/cases/${record.id}`)
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '创建或上传失败，请稍后重试')
+    failure.value = error instanceof Error ? error.message : '创建或上传失败，请稍后重试'
+    ElMessage.error(failure.value)
   } finally { creating.value = false }
 }
 </script>
@@ -46,6 +54,8 @@ async function submit() {
 <template>
   <main class="page-shell narrow">
     <div class="page-header"><div><p class="eyebrow">管理员 / 案例管理</p><h1>创建案例</h1><p class="page-description">按“创建案例 → 上传文件 → 创建转换版本”的顺序提交。</p></div><el-button @click="router.push('/admin/cases')">返回列表</el-button></div>
+    <el-steps :active="stage" simple class="import-progress"><el-step title="案例信息"/><el-step title="点云文件"/><el-step title="转换版本"/></el-steps>
+    <el-alert v-if="failure" :title="failure" type="error" :closable="false" />
     <el-card shadow="never">
       <el-form ref="formRef" :model="form" label-position="top">
         <div class="form-grid">
@@ -57,7 +67,7 @@ async function submit() {
           <el-form-item label="有效期"><el-date-picker v-model="form.validUntil" type="date" value-format="YYYY-MM-DD" placeholder="不填表示长期有效" :disabled="creating" /></el-form-item>
           <el-form-item label="脱敏等级" prop="desensitizationLevel" :rules="[{ required: true, message: '请选择脱敏等级', trigger: 'change' }]"><el-select v-model="form.desensitizationLevel" placeholder="请选择" :disabled="creating"><el-option label="一级" value="一级" /><el-option label="二级" value="二级" /><el-option label="三级" value="三级" /></el-select></el-form-item>
         </div>
-        <el-form-item label="点云文件" required><el-upload :auto-upload="false" :limit="1" :file-list="fileList" accept=".las,.laz" :on-change="selectFile" :on-remove="removeFile" :disabled="creating"><el-button :disabled="creating">选择 LAS / LAZ 文件</el-button><template #tip><div class="el-upload__tip">仅支持 .las、.laz，单个文件不超过 2 GB；不在页面展示原始存储路径。</div></template></el-upload><p v-if="fileSummary" class="file-summary">待上传：{{ fileSummary }}</p></el-form-item>
+        <el-form-item label="点云文件" required><el-upload drag :auto-upload="false" :limit="1" :file-list="fileList" accept=".las,.laz" :on-change="selectFile" :on-remove="removeFile" :disabled="creating"><el-button :disabled="creating">拖拽 LAS / LAZ 文件至此，或点击选择</el-button><template #tip><div class="el-upload__tip">仅支持 .las、.laz，单个文件不超过 2 GB；不在页面展示原始存储路径。</div></template></el-upload><p v-if="fileSummary" class="file-summary">待上传：{{ fileSummary }}</p></el-form-item>
         <el-alert title="提交后将创建转换版本，处理完成前请勿重复提交。" type="info" :closable="false" show-icon />
         <div class="form-actions"><el-button @click="router.push('/admin/cases')" :disabled="creating">取消</el-button><el-button type="primary" :loading="creating" @click="submit">{{ creating ? '正在提交…' : '创建并上传' }}</el-button></div>
       </el-form>

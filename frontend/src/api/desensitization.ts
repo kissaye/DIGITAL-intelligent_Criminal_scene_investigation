@@ -25,7 +25,15 @@ export function mapDesensitizationRule(value: unknown): DesensitizationRule {
 }
 const toRequest = (payload: DesensitizationRulePayload) => ({ mode: payload.type, geometry: { type: 'BOX', min: payload.range.min, max: payload.range.max }, title: payload.title, description: payload.description })
 
-function readMock(versionId: string): DesensitizationRule[] { try { return (JSON.parse(localStorage.getItem(key(versionId)) || '[]') as unknown[]).map(mapDesensitizationRule) } catch { return [] } }
+function readMock(versionId: string): DesensitizationRule[] {
+  try {
+    const values = JSON.parse(localStorage.getItem(key(versionId)) || '[]') as unknown[]
+    return values.map(value => {
+      const rule = record(value)
+      return mapDesensitizationRule({ ...rule, mode: rule.mode ?? rule.type, geometry: rule.geometry ?? rule.range })
+    })
+  } catch { return [] }
+}
 function writeMock(versionId: string, rules: DesensitizationRule[]) { localStorage.setItem(key(versionId), JSON.stringify(rules)) }
 function mapResult(value: unknown): DerivedVersionResult {
   const source = record(value)

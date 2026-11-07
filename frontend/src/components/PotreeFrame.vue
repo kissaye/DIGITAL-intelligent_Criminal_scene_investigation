@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-const props = defineProps<{ manifestUrl: string; mock: boolean; masks?: Array<{ id: string; type: 'HIDE' | 'DELETE'; title: string; range: { min: [number, number, number]; max: [number, number, number] }; enforced: boolean }>; hidePreview?: boolean }>()
+type HighlightRule = { id: string; type: 'HIDE'|'DELETE'; title: string; range: {min:number[];max:number[]} }
+const props = defineProps<{ manifestUrl: string; mock: boolean; masks?: Array<{ id: string; type: 'HIDE' | 'DELETE'; title: string; range: { min: [number, number, number]; max: [number, number, number] }; enforced: boolean }>; hidePreview?: boolean; selectedRule?: HighlightRule }>()
 const emit = defineEmits<{
   loaded: []
   error: [message: string]
@@ -18,14 +19,14 @@ function resetView() { send('reset') }
 function startPointPick() { send('pick-point') }
 function startMeasurement() { send('measure') }
 function startArea() { send('area') }
-function syncMasks() { send('set-desensitization-masks', { masks: props.masks || [], hidePreview: props.hidePreview === true }) }
+function syncMasks() { send('set-desensitization-masks', { masks: JSON.parse(JSON.stringify(props.masks || [])), hidePreview: props.hidePreview === true, selectedRule: props.selectedRule ? JSON.parse(JSON.stringify(props.selectedRule)) : null }) }
 // manifestUrl 由后端受控下发，必须保持为同源的 /api 相对路径；不传递 Token 或原始点云路径。
 function load() { if (props.mock) send('load-mock'); else if (props.manifestUrl) send('load', { manifestUrl: props.manifestUrl }); else emit('error', '后端未返回受控点云清单地址，无法加载 Viewer。') }
 function message(event: MessageEvent) { if (event.origin !== window.location.origin || event.data?.source !== 'dici-potree') return; if (event.data.type === 'ready') load(); if (event.data.type === 'loaded') { status.value = 'Viewer 已就绪'; syncMasks(); emit('loaded') } if (event.data.type === 'error') { status.value = '加载失败'; emit('error', event.data.message || 'Potree 加载失败') } if (event.data.type === 'camera') emit('camera', event.data.camera || {}) ; if (event.data.type === 'pick') emit('pick', event.data.point); if (event.data.type === 'measurement') emit('measurement', event.data); if (event.data.type === 'area') emit('area', event.data.area) }
 onMounted(() => { window.addEventListener('message', message); frame.value?.addEventListener('load', load) })
 onBeforeUnmount(() => window.removeEventListener('message', message))
 watch(() => props.manifestUrl, load)
-watch(() => [props.masks, props.hidePreview], syncMasks, { deep: true })
+watch(() => [props.masks, props.hidePreview, props.selectedRule], syncMasks, { deep: true })
 defineExpose({ resetView, startPointPick, startMeasurement, startArea, status })
 </script>
 <template><div class="potree-frame"><iframe ref="frame" :src="src" title="Potree 点云浏览器" sandbox="allow-scripts allow-same-origin" /><span class="viewer-status">{{ status }}</span></div></template>
