@@ -70,12 +70,19 @@ function measure(){
   if(!viewer)return;
   send('tool-status',{message:'请依次在点云中选取起点和终点'});
   const measurement=viewer.measuringTool.startInsertion({showDistances:true,maxMarkers:2});
-  let completed=false;
+  const domElement=viewer.renderer.domElement;
+  let completed=false,firstPointPlaced=false,secondClickStarted=false;
+  const armSecondClick=()=>{if(firstPointPlaced)secondClickStarted=true};
+  const cleanup=()=>domElement.removeEventListener('mousedown',armSecondClick,true);
+  domElement.addEventListener('mousedown',armSecondClick,true);
   measurement.addEventListener('marker_dropped',event=>{
     if(completed)return;
-    if(event.index===0){send('tool-status',{message:'起点已选取，请选取终点'});return}
-    if(event.index!==1||measurement.points?.length<2)return;
+    if(event.index===0){firstPointPlaced=true;send('tool-status',{message:'起点已选取，请再单击选取终点'});return}
+    // Potree 会在第一次 mouseup 的同一事件周期创建并落下临时终点。
+    // 只有起点落下后又发生过一次独立 mousedown，才是用户真正的第二次点击。
+    if(event.index!==1||!secondClickStarted||measurement.points?.length<2)return;
     completed=true;
+    cleanup();
     const startPoint=xyz(measurement.points[0].position),endPoint=xyz(measurement.points[1].position);
     send('measurement',{startPoint,endPoint});
     send('tool-status',{message:'测距已完成'});
