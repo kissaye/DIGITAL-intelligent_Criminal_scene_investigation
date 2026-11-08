@@ -16,6 +16,7 @@ from app.models.user import User
 from app.schemas.common import APIResponse
 from app.schemas.viewer import AnnotationCreate, AnnotationData, MeasurementCreate, MeasurementData
 from app.services.practice_access import require_open_task
+from app.services.measurements import points_and_distance
 
 router = APIRouter(tags=["viewer"])
 settings = get_settings()
@@ -112,9 +113,8 @@ def measurements(version_id: str, admin: Annotated[User, Depends(require_admin)]
 @router.post("/case-versions/{version_id}/measurements", status_code=201)
 def create_measurement(version_id: str, payload: MeasurementCreate, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):
     _ready(db, version_id)
-    try: distance = math.dist([float(payload.start_point[k]) for k in ("x", "y", "z")], [float(payload.end_point[k]) for k in ("x", "y", "z")])
-    except (KeyError, TypeError, ValueError): raise HTTPException(422, "Points must contain numeric x, y, z")
-    item = Measurement(case_version_id=version_id, owner_id=admin.id, start_point=payload.start_point, end_point=payload.end_point, distance=distance, viewer_state=payload.viewer_state); db.add(item); db.flush(); db.add(AuditLog(action="MEASUREMENT_CREATED", actor_id=admin.id, case_version_id=version_id, detail={"measurementId": item.id})); db.commit(); db.refresh(item); return APIResponse(data=_measurement(item), request_id=request_id)
+    start,end,distance=points_and_distance(payload.start_point,payload.end_point)
+    item = Measurement(case_version_id=version_id, owner_id=admin.id, start_point=start, end_point=end, distance=distance, viewer_state=payload.viewer_state); db.add(item); db.flush(); db.add(AuditLog(action="MEASUREMENT_CREATED", actor_id=admin.id, case_version_id=version_id, detail={"measurementId": item.id})); db.commit(); db.refresh(item); return APIResponse(data=_measurement(item), request_id=request_id)
 
 @router.delete("/measurements/{measurement_id}")
 def delete_measurement(measurement_id: str, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):
