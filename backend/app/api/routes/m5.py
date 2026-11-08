@@ -1,6 +1,7 @@
 """Administrator authorization, publication and audit endpoints."""
 import hashlib
 import shutil
+import stat
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -38,6 +39,9 @@ def case_or_404(db, case_id):
 def authorization_data(item):
     return {"id": item.id, "reference": item.authorization_no, "scope": item.scope, "validUntil": utc(item.valid_until), "revokedAt": utc(item.revoked_at)}
 
+REQUIRED_POTREE_FILES = {"metadata.json", "hierarchy.bin", "octree.bin"}
+PUBLISHED_SUFFIXES = {".json", ".bin"}
+
 def copy_checksum(directory):
     digest = hashlib.sha256()
     files = sorted((p for p in directory.rglob("*") if p.is_file()), key=lambda p: p.relative_to(directory).as_posix())
@@ -47,18 +51,42 @@ def copy_checksum(directory):
             while chunk := stream.read(1024 * 1024): digest.update(chunk)
     return digest.hexdigest()
 
-def safe_potree_source(version):
-    root = Path(get_settings().storage_root).resolve()
+def safe_potree_source(version, storage_root: Path | None = None):
+    root = (storage_root or Path(get_settings().storage_root)).resolve()
     source = (root / "cases" / version.case_id / "versions" / version.id / "potree").resolve()
     if root not in source.parents or not source.is_dir() or source.is_symlink():
         raise HTTPException(409, "Converted point cloud is unavailable")
-    manifest = source / "metadata.json"
-    if not manifest.is_file() or manifest.is_symlink(): raise HTTPException(409, "Potree metadata is missing")
+    present = {path.name for path in source.iterdir() if path.is_file() and not path.is_symlink()}
+    if not REQUIRED_POTREE_FILES <= present: raise HTTPException(409, "Potree metadata, hierarchy.bin and octree.bin are required")
+    publishable=[]
     for item in source.rglob("*"):
         resolved = item.resolve()
         if item.is_symlink() or (resolved != source and source not in resolved.parents): raise HTTPException(409, "Unsafe converter output")
-        if item.is_file() and item.suffix.lower() not in {".json", ".bin"}: raise HTTPException(409, "Unexpected converter output")
-    return root, source
+        mode = item.stat(follow_symlinks=False).st_mode
+        if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)): raise HTTPException(409, "Unsafe converter output")
+        if item.is_file():
+            relative=item.relative_to(source)
+            # PotreeConverter 2.1.1 diagnostic only; never publish it.
+            if relative.as_posix()=="log.txt": continue
+            if item.suffix.lower() not in PUBLISHED_SUFFIXES: raise HTTPException(409, "Unexpected converter output")
+            publishable.append(relative)
+    return root, source, publishable
+
+def copy_teaching_assets(source, destination, files):
+    if destination.exists(): raise HTTPException(409,"Unsafe teaching destination")
+    destination.mkdir(parents=True)
+    try:
+        for relative in files:
+            src=(source/relative).resolve(); target=(destination/relative).resolve()
+            if source not in src.parents or destination not in target.parents or src.is_symlink() or not src.is_file() or not stat.S_ISREG(src.stat().st_mode):
+                raise HTTPException(409,"Unsafe converter output")
+            target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(src,target)
+    except Exception:
+        # This helper owns a newly-created destination.  Never leave a partial
+        # teaching copy behind for a caller that handles a copy failure.
+        shutil.rmtree(destination, ignore_errors=True)
+        raise
 
 @router.get("/cases/{case_id}/authorizations")
 def authorizations(case_id: str, _: User = Depends(require_admin), db: Session = Depends(get_db), request_id: str = Depends(get_request_id)):
@@ -104,10 +132,10 @@ def publish(version_id: str, payload: PublicationInput, admin: User = Depends(re
     if not payload.review_confirmed: raise HTTPException(422, "Human review confirmation is required")
     if authorization is None or authorization.revoked_at is not None or utc(authorization.valid_until) <= now: raise HTTPException(409, "A valid authorization for this case is required")
     if valid_until <= now or valid_until > utc(authorization.valid_until) or (case.valid_until is not None and valid_until > utc(case.valid_until)): raise HTTPException(422, "Publication validity exceeds authorization or case validity")
-    root, source = safe_potree_source(version); destination = (root / "teaching" / str(uuid4())).resolve()
+    root, source, assets = safe_potree_source(version); destination = (root / "teaching" / str(uuid4())).resolve()
     if root not in destination.parents or destination.exists(): raise HTTPException(409, "Unsafe teaching destination")
     try:
-        shutil.copytree(source, destination)
+        copy_teaching_assets(source, destination, assets)
         manifest = destination / "metadata.json"
         hide_rules=[{"id":r.id,"mode":r.mode,"geometry":r.geometry,"title":r.title,"description":r.description} for r in db.scalars(select(DesensitizationRule).where(DesensitizationRule.case_version_id==version.id,DesensitizationRule.mode=="HIDE",DesensitizationRule.status=="APPLIED")).all()]
         copy = TeachingCopy(case_version_id=version.id, authorization_id=authorization.id, manifest_key=manifest.relative_to(root).as_posix(), checksum_sha256=copy_checksum(destination), reviewed_at=now, reviewed_by=admin.id, review_note=payload.review_note, valid_until=valid_until, published_by=admin.id,desensitization_rules=hide_rules)

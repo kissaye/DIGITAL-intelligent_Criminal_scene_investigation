@@ -62,7 +62,10 @@ def published():
         db.add(version); db.flush()
         case_id, version_id = case.id, version.id
     potree = Path(os.environ["STORAGE_ROOT"]) / "cases" / case_id / "versions" / version_id / "potree"
-    potree.mkdir(parents=True); (potree / "metadata.json").write_text("{}", encoding="utf-8"); (potree / "node.bin").write_bytes(b"bin")
+    potree.mkdir(parents=True)
+    (potree / "metadata.json").write_text("{}", encoding="utf-8")
+    (potree / "hierarchy.bin").write_bytes(b"hierarchy")
+    (potree / "octree.bin").write_bytes(b"octree")
     future = (datetime.now(UTC) + timedelta(days=3)).isoformat().replace("+00:00", "Z")
     auth = client.post(f"/api/v1/cases/{case_id}/authorizations", headers=admin, json={"reference": f"AUTH-{version_id}", "scope": "teaching", "validUntil": future})
     assert auth.status_code == 201
@@ -105,7 +108,7 @@ def test_student_teaching_assets_and_revocation(published):
     assert client.get(f"/api/v1/student/tasks/{task_id}/workspace", headers=student).status_code == 200
     asset_response = client.get(asset)
     assert asset_response.status_code == 200, asset_response.text
-    assert client.get(f"/api/v1/viewer-assets/{version_id}/node.bin").content == b"bin"
+    assert client.get(f"/api/v1/viewer-assets/{version_id}/hierarchy.bin").content == b"hierarchy"
     # URL normalization may remove the version-bound Cookie path first; neither result exposes an asset.
     assert client.get(f"/api/v1/viewer-assets/{version_id}/../metadata.json").status_code in {401, 404}
     assert client.get(f"/api/v1/viewer-assets/{version_id}/test.txt").status_code == 404
