@@ -35,6 +35,8 @@ async function save(): Promise<boolean> {
 }
 function addMeasurement(points: Pick<Measurement, 'startPoint'|'endPoint'>) {
   if (!workspace.value || readonly.value || submitting.value) return
+  const { startPoint: a, endPoint: b } = points
+  if (![a.x,a.y,a.z,b.x,b.y,b.z].every(Number.isFinite) || Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<=1e-6) { ElMessage.warning('起点和终点不能重合'); return }
   workspace.value.measurements.push({ ...points, id: crypto.randomUUID(), createdAt: new Date().toISOString() })
   schedule()
 }

@@ -17,10 +17,11 @@
 <script src="/vendor/potree/libs/jstree/jstree.js"></script>
 <script src="/vendor/potree/build/potree/potree.js"></script>
 <script src="/vendor/potree/libs/plasio/js/laslaz.js"></script>
+<script src="/two-point-measurement.js"></script>
 <script>
 const send=(type,p={})=>parent.postMessage({source:'dici-potree',type,...p},location.origin),mock=new URLSearchParams(location.search).get('mock')==='1';let viewer,maskVolumes=[],highlightVolume;
 function notice(t){document.getElementById('potree_render_area').innerHTML='<div class="notice">'+t+'</div>'}function boot(){if(mock){notice('模拟 Viewer 模式<br>不会伪造或加载真实点云。');send('loaded');return}if(window.Potree)send('ready');else{notice('Potree 本地资源加载失败');send('error',{message:'Potree 本地静态资源不可用'})}}
-function load(url){if(!window.Potree)return send('error',{message:'Potree 尚未完成初始化'});document.getElementById('potree_render_area').innerHTML='';viewer=new Potree.Viewer(document.getElementById('potree_render_area'));viewer.setEDLEnabled(true);viewer.setPointBudget(1500000);Potree.loadPointCloud(url,'scene',e=>{if(!e.pointcloud)return send('error',{message:'点云清单加载失败'});viewer.scene.addPointCloud(e.pointcloud);viewer.fitToScreen();send('loaded')})}
+function load(url){measurementSession?.cancel();if(!window.Potree)return send('error',{message:'Potree 尚未完成初始化'});document.getElementById('potree_render_area').innerHTML='';viewer=new Potree.Viewer(document.getElementById('potree_render_area'));viewer.setEDLEnabled(true);viewer.setPointBudget(1500000);Potree.loadPointCloud(url,'scene',e=>{if(!e.pointcloud)return send('error',{message:'点云清单加载失败'});viewer.scene.addPointCloud(e.pointcloud);viewer.fitToScreen();send('loaded')})}
 function highlight(rule){
   if(mock){
     document.getElementById('mock-highlight')?.remove();
@@ -53,6 +54,7 @@ function masks(items){if(mock){
 }if(!viewer)return;maskVolumes.forEach(v=>viewer.scene.removeVolume(v));maskVolumes=[];items.filter(x=>x.type==='HIDE').forEach(x=>{const a=x.range.min,b=x.range.max,v=new Potree.BoxVolume();v.name=x.title||'教学强制遮挡';v.position.set((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);v.scale.set(Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1]),Math.abs(b[2]-a[2]));v.clip=true;v.material.opacity=.28;v.material.color.set(0xe6a23c);viewer.scene.addVolume(v);maskVolumes.push(v)});if(maskVolumes.length){viewer.setClipTask(Potree.ClipTask.SHOW_OUTSIDE);if(Potree.ClipMethod)viewer.setClipMethod(Potree.ClipMethod.INSIDE_ANY)}else viewer.setClipTask(Potree.ClipTask.NONE)}
 function xyz(v){return{x:v.x,y:v.y,z:v.z}}
 function pick(){
+  measurementSession?.cancel();
   if(mock){send('pick',{point:{x:0,y:0,z:0}});return send('tool-status',{message:'已选取模拟点位'})}
   if(!viewer)return;
   send('tool-status',{message:'请在点云中单击选取点位'});
@@ -65,29 +67,18 @@ function pick(){
     send('tool-status',{message:'点位已选取'});
   });
 }
+let measurementSession;
 function measure(){
   if(mock){send('measurement',{startPoint:{x:1,y:2,z:3},endPoint:{x:4,y:6,z:3}});return send('tool-status',{message:'模拟测距已完成'})}
   if(!viewer)return;
-  send('tool-status',{message:'请依次在点云中选取起点和终点'});
-  const measurement=viewer.measuringTool.startInsertion({showDistances:true,maxMarkers:2});
-  const domElement=viewer.renderer.domElement;
-  let completed=false,firstPointPlaced=false,secondClickStarted=false;
-  const armSecondClick=()=>{if(firstPointPlaced)secondClickStarted=true};
-  const cleanup=()=>domElement.removeEventListener('mousedown',armSecondClick,true);
-  domElement.addEventListener('mousedown',armSecondClick,true);
-  measurement.addEventListener('marker_dropped',event=>{
-    if(completed)return;
-    if(event.index===0){firstPointPlaced=true;send('tool-status',{message:'起点已选取，请再单击选取终点'});return}
-    // Potree 会在第一次 mouseup 的同一事件周期创建并落下临时终点。
-    // 只有起点落下后又发生过一次独立 mousedown，才是用户真正的第二次点击。
-    if(event.index!==1||!secondClickStarted||measurement.points?.length<2)return;
-    completed=true;
-    cleanup();
-    const startPoint=xyz(measurement.points[0].position),endPoint=xyz(measurement.points[1].position);
-    send('measurement',{startPoint,endPoint});
-    send('tool-status',{message:'测距已完成'});
+  measurementSession?.cancel();
+  measurementSession = createTwoPointMeasurement({
+    viewer, Potree,
+    status: message => send('tool-status',{message}),
+    complete: points => send('measurement',points),
   });
+  measurementSession.begin();
 }
-function area(){if(!viewer)return;let h=e=>{let v=e.volume;if(v)send('area',{area:{center:[v.position.x,v.position.y,v.position.z],size:[v.scale.x,v.scale.y,v.scale.z],rotation:[v.rotation.x,v.rotation.y,v.rotation.z]}});viewer.volumeTool.removeEventListener('volume_added',h)};viewer.volumeTool.addEventListener('volume_added',h);viewer.volumeTool.startInsertion({clip:true})}
-addEventListener('message',e=>{if(e.origin!==location.origin||e.data?.source!=='dici-parent')return;let d=e.data;if(d.type==='load')load(d.manifestUrl);if(d.type==='load-mock')boot();if(d.type==='set-desensitization-masks'){masks(d.masks||[]);highlight(d.selectedRule)};if(d.type==='reset'&&viewer)viewer.fitToScreen();if(d.type==='pick-point')pick();if(d.type==='measure')measure();if(d.type==='area')area()});boot();
+function area(){measurementSession?.cancel();if(!viewer)return;let h=e=>{let v=e.volume;if(v)send('area',{area:{center:[v.position.x,v.position.y,v.position.z],size:[v.scale.x,v.scale.y,v.scale.z],rotation:[v.rotation.x,v.rotation.y,v.rotation.z]}});viewer.volumeTool.removeEventListener('volume_added',h)};viewer.volumeTool.addEventListener('volume_added',h);viewer.volumeTool.startInsertion({clip:true})}
+addEventListener('message',e=>{if(e.origin!==location.origin||e.data?.source!=='dici-parent')return;let d=e.data;if(d.type==='load')load(d.manifestUrl);if(d.type==='load-mock')boot();if(d.type==='set-desensitization-masks'){masks(d.masks||[]);highlight(d.selectedRule)};if(d.type==='reset'&&viewer)viewer.fitToScreen();if(d.type==='pick-point')pick();if(d.type==='measure')measure();if(d.type==='area')area()});window.addEventListener('pagehide',()=>measurementSession?.cancel());boot();
 </script></body></html>

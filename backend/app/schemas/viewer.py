@@ -1,7 +1,20 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+import math
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+class Coordinate3D(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    x: float
+    y: float
+    z: float
+    @field_validator("x", "y", "z", mode="before")
+    @classmethod
+    def finite_number(cls, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError("coordinate must be a finite number")
+        return float(value)
 
 
 class AnnotationCreate(BaseModel):
@@ -21,8 +34,9 @@ class AnnotationData(AnnotationCreate):
 
 
 class MeasurementCreate(BaseModel):
-    start_point: dict = Field(alias="startPoint")
-    end_point: dict = Field(alias="endPoint")
+    model_config = ConfigDict(extra="forbid")
+    start_point: Coordinate3D = Field(alias="startPoint")
+    end_point: Coordinate3D = Field(alias="endPoint")
     distance: float | None = None
     viewer_state: dict | None = Field(default=None, alias="viewerState")
 

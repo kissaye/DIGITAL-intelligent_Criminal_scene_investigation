@@ -8,7 +8,15 @@ const wait = (ms = 180) => new Promise((resolve) => window.setTimeout(resolve, m
 const emptyWorkspace = (): StudentWorkspace => ({ manifestUrl: '', forcedDesensitizationRules: [], draft: { overview: '', process: '', evidenceDescription: '', preliminaryConclusion: '' }, annotations: [], measurements: [], submitted: false, submittedAt: null, submissionVersion: null })
 interface WorkspaceResponse { task: StudentTask; draft: DraftResponse | null; viewerConfig: { versionId: string; manifestUrl: string; forcedDesensitizationRules: StudentWorkspace['forcedDesensitizationRules'] } }
 function toWorkspace(response: WorkspaceResponse): StudentWorkspace { const draft = response.draft; return { manifestUrl: response.viewerConfig.manifestUrl, forcedDesensitizationRules: response.viewerConfig.forcedDesensitizationRules || [], draft: draft?.reportContent || emptyWorkspace().draft, annotations: draft?.marks || [], measurements: draft?.measurements || [], submitted: draft?.status === 'SUBMITTED', submittedAt: draft?.submittedAt || null, submissionVersion: draft?.version || null } }
-function toPayload(workspace: StudentWorkspace): StudentDraftPayload { return { reportContent: workspace.draft, marks: workspace.annotations, measurements: workspace.measurements } }
+function toPayload(workspace: StudentWorkspace): StudentDraftPayload {
+  return {
+    reportContent: workspace.draft,
+    marks: workspace.annotations,
+    // IDs, timestamps and any server-computed distance are response-only fields.
+    // Sending only coordinates keeps the strict backend contract stable after a draft reload.
+    measurements: workspace.measurements.map(({ startPoint, endPoint }) => ({ startPoint, endPoint })),
+  }
+}
 function applyDraftResponse(workspace: StudentWorkspace, draft: DraftResponse): StudentWorkspace { return { ...workspace, draft: draft.reportContent, annotations: draft.marks, measurements: draft.measurements, submitted: draft.status === 'SUBMITTED', submittedAt: draft.submittedAt, submissionVersion: draft.version } }
 function mockTasks(): StudentTask[] { const raw = localStorage.getItem(key('tasks')); if (raw) return JSON.parse(raw) as StudentTask[]; const tasks: StudentTask[] = [{ id: 'mock-task-001', name: '住宅现场勘查实训', caseName: '教学演示案例', instructions: '完成现场观察、标记与勘验笔录。', caseVersionId: 'mock-version-001', startAt: '2026-10-01T08:00:00+08:00', dueAt: '2026-12-31T23:59:59+08:00', status: 'IN_PROGRESS', allowLate: false, submissionId: null, submittedAt: null, submissionVersion: null }]; localStorage.setItem(key('tasks'), JSON.stringify(tasks)); return tasks }
 function mockWorkspace(taskId: string): StudentWorkspace { const raw = localStorage.getItem(key(`workspace-${taskId}`)); if (raw) return JSON.parse(raw); const workspace = emptyWorkspace(); localStorage.setItem(key(`workspace-${taskId}`), JSON.stringify(workspace)); return workspace }

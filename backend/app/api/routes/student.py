@@ -13,6 +13,7 @@ from app.schemas.common import APIResponse
 from app.schemas.student import DraftPayload
 from app.services.practice_access import require_open_task
 from app.models.case import TeachingCopy
+from app.services.measurements import points_and_distance
 router=APIRouter(prefix="/student",tags=["student"]); settings=get_settings()
 def utc_time(value):
     if value is None: return None
@@ -46,10 +47,10 @@ def subdata(db,s):
 def save(db,t,u,p):
     if db.scalar(select(Submission).where(Submission.task_id==t.id,Submission.student_id==u.id,Submission.status=="SUBMITTED")):
         raise HTTPException(409,"Submitted work is frozen")
+    validated=[points_and_distance(m.start_point,m.end_point) for m in p.measurements]
     s=draft(db,t,u) or Submission(task_id=t.id,student_id=u.id,status="DRAFT",version_no=1);db.add(s);db.flush();s.report_content=p.report_content;db.query(SubmissionMark).filter_by(submission_id=s.id).delete();db.query(SubmissionMeasurement).filter_by(submission_id=s.id).delete()
     for m in p.marks: db.add(SubmissionMark(submission_id=s.id,geometry=m.get("geometry",{}),title=m.get("title",""),description=m.get("description"),viewer_state=m.get("viewerState")))
-    for m in p.measurements:
-        a,b=m.get("startPoint",{}),m.get("endPoint",{});dist=math.dist([float(a[k]) for k in('x','y','z')],[float(b[k]) for k in('x','y','z')]);db.add(SubmissionMeasurement(submission_id=s.id,start_point=a,end_point=b,distance=dist,viewer_state=m.get("viewerState")))
+    for m,(a,b,dist) in zip(p.measurements,validated): db.add(SubmissionMeasurement(submission_id=s.id,start_point=a,end_point=b,distance=dist,viewer_state=m.viewer_state))
     return s
 @router.put("/tasks/{task_id}/draft")
 def save_draft(task_id:str,payload:DraftPayload,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
