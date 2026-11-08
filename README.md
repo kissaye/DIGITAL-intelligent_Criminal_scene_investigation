@@ -87,4 +87,6 @@ docker compose up -d
 docker compose exec backend python scripts/verify_m7.py
 ```
 
-真实验收脚本使用 CC0 合成网格，覆盖 LAS、LAZ、DELETE BOX、文件哈希、审计和原文件访问隔离。完整启动、状态流、输出路径、测试和当前执行限制见 [M7 运行与验收记录](docs/M7-real-pointcloud.md)。本次会话访问 Docker Engine 命名管道被拒绝，真实工具链仍待容器实测。
+真实验收脚本使用 CC0 合成网格，覆盖 LAS、LAZ、DELETE BOX、文件哈希、审计和原文件访问隔离。完整启动、状态流、输出路径与测试结果见 [M7 运行与验收记录](docs/M7-real-pointcloud.md)。真实工具链已完成容器验收，全量后端测试 27 项通过。
+
+Potree Viewer 1.8 及其 Worker/依赖在前端镜像构建时按固定 revision 打包，运行时从同源 `/vendor/potree/` 加载，不依赖 jsDelivr 或其他外部 CDN，可用于断网演示。
