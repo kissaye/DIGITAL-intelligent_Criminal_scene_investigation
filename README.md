@@ -75,3 +75,16 @@ M2 仅向管理员开放 READY 版本的 `GET /api/v1/case-versions/{versionId}/
 - `刑侦三维案例脱敏与教学实训平台 PRD V1.0.docx`
 - `刑侦三维案例平台 安全合规与竞赛材料包.docx`
 - `build_prd_baseline.py` 与 `build_compliance_pack.py`：以上文档的生成脚本。
+
+
+## M7 真实点云环境
+
+后端镜像配置 PDAL 2.8.4 与 PotreeConverter 2.1.1，API 和 RQ Worker 共用镜像及受控存储。Compose 增加独立迁移与种子服务、Redis/API/Worker 健康检查。成果必须通过 metadata、hierarchy、octree 的结构与点数校验才能进入 READY。
+
+```powershell
+docker compose build
+docker compose up -d
+docker compose exec backend python scripts/verify_m7.py
+```
+
+真实验收脚本使用 CC0 合成网格，覆盖 LAS、LAZ、DELETE BOX、文件哈希、审计和原文件访问隔离。完整启动、状态流、输出路径、测试和当前执行限制见 [M7 运行与验收记录](docs/M7-real-pointcloud.md)。本次会话访问 Docker Engine 命名管道被拒绝，真实工具链仍待容器实测。

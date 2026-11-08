@@ -78,7 +78,7 @@ def apply(version_id:str,admin:User=Depends(require_admin),db:Session=Depends(ge
         job=Job(case_version_id=child.id,type="DESENSITIZATION_DELETE",status="PENDING",progress=0);db.add(job)
     db.add(AuditLog(action="DESENSITIZATION_APPLIED",actor_id=admin.id,case_id=child.case_id,case_version_id=child.id,detail={"parentVersionId":parent.id,"modes":[r.mode for r in rules]}));db.commit()
     if job:
-        try: get_queue().enqueue(run_delete_desensitization,job.id,job_id=job.id)
+        try: get_queue().enqueue(run_delete_desensitization,job.id,job_id=job.id,job_timeout=settings.conversion_timeout_seconds * 3 + 60)
         except Exception as exc:
             child.status,child.error_message="FAILED",f"Desensitization queue unavailable: {exc}"[:4000];job.status,job.error_message="FAILED",child.error_message;db.commit()
     return APIResponse(data={"versionId":child.id,"parentVersionId":child.parent_version_id,"status":child.status,"jobId":job.id if job else None,"progress":job.progress if job else 100,"failureReason":child.error_message},request_id=request_id)

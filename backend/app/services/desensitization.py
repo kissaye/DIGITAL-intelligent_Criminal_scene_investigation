@@ -32,8 +32,10 @@ def run_delete_desensitization(job_id):
    result=subprocess.run([s.pdal_path,"pipeline","--stdin"],input=json.dumps({"pipeline":pipeline}),capture_output=True,text=True,timeout=s.conversion_timeout_seconds,check=False)
    if result.returncode!=0 or not output.is_file(): raise RuntimeError(f"PDAL delete pipeline failed: {result.stderr.strip() or result.stdout.strip()}")
    count,bounds=_read_pdal_metadata(output);pc=parent.point_count
-   if pc is not None and count>pc: raise RuntimeError("DELETE output point count exceeds parent")
-   digest=hashlib.sha256(output.read_bytes()).hexdigest();v.source_file.size_bytes=output.stat().st_size;v.source_file.checksum_sha256=digest;v.point_count=count;v.bounds=bounds;job.progress=45
+   if pc is None: pc,_=_read_pdal_metadata(source)
+   if count>pc: raise RuntimeError("DELETE output point count exceeds parent")
+   with output.open("rb") as stream: digest=hashlib.file_digest(stream,"sha256").hexdigest()
+   v.source_file.size_bytes=output.stat().st_size;v.source_file.checksum_sha256=digest;v.point_count=count;v.bounds=bounds;job.progress=45
    db.add(AuditLog(action="DESENSITIZATION_DELETE_SUCCEEDED",case_id=v.case_id,case_version_id=v.id,job_id=job.id,detail={"deleteRuleCount":len(rules),"parentPointCount":pc,"pointCount":count,"sha256":digest}))
   run_conversion(job_id)
  except Exception as exc:

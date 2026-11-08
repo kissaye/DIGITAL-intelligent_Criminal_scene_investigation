@@ -115,7 +115,7 @@ def create_version(case_id: str, payload: VersionCreate, admin: Annotated[User, 
     db.commit()
     db.refresh(version)
     try:
-        get_queue().enqueue(run_conversion, job.id, job_id=job.id)
+        get_queue().enqueue(run_conversion, job.id, job_id=job.id, job_timeout=settings.conversion_timeout_seconds * 2 + 60)
     except Exception as exc:
         message = f"Conversion queue unavailable: {exc}"[:4000]
         version.status, version.error_message = "FAILED", message
