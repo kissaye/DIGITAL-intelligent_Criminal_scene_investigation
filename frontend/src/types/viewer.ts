@@ -10,7 +10,7 @@ export interface ViewerConfig {
   forcedDesensitizationRules: ForcedDesensitizationRule[]
 }
 export interface Point3D { x: number; y: number; z: number }
-export interface ViewerState { camera: Record<string, unknown> }
+export interface ViewerState { camera?: Record<string, unknown> }
 export type AnnotationType = 'POINT_MARK' | 'AREA_MARK'
 
 export interface Annotation {
@@ -27,5 +27,16 @@ export interface Measurement {
   id: string
   startPoint: Point3D
   endPoint: Point3D
-  createdAt: string
+  deltaX: number
+  deltaY: number
+  deltaZ: number
+  horizontalDistance: number
+  verticalDistance: number
+  distance: number
+  title?: string | null
+  description?: string | null
+  viewerState?: ViewerState
+  createdAt?: string
 }
+
+export type MeasurementPayload = Pick<Measurement, 'startPoint'|'endPoint'|'title'|'description'|'viewerState'>

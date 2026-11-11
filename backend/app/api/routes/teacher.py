@@ -8,6 +8,8 @@ from app.models.practice import Class,ClassMember,Course,Submission,SubmissionMa
 from app.models.user import User
 from app.schemas.common import APIResponse
 from app.services.publication import require_teaching_version
+from app.services.measurements import measurement_values
+from app.services.report_content import normalize_report_content
 router=APIRouter(prefix="/teacher",tags=["teacher"])
 def dt(v): return datetime.fromisoformat(v.replace('Z','+00:00')) if isinstance(v,str) else v
 def classdata(db,x):
@@ -85,7 +87,10 @@ def submissions(tid:str,u:User=Depends(require_teacher),db:Session=Depends(get_d
 def submission(sid:str,u:User=Depends(require_teacher),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
  s=db.scalar(select(Submission).where(Submission.id==sid));
  if not s: raise HTTPException(404,'Submission not found')
- owned_task(db,s.task_id,u);return APIResponse(data={**summary(s,db),'reportContent':s.report_content,'marks':[{'id':x.id,'geometry':x.geometry,'title':x.title,'description':x.description} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],'measurements':[{'id':x.id,'startPoint':x.start_point,'endPoint':x.end_point,'distance':x.distance} for x in db.scalars(select(SubmissionMeasurement).where(SubmissionMeasurement.submission_id==s.id))],'feedback':s.feedback},request_id=request_id)
+ owned_task(db,s.task_id,u); measurements=[]
+ for x in db.scalars(select(SubmissionMeasurement).where(SubmissionMeasurement.submission_id==s.id)):
+  values=measurement_values(x.start_point,x.end_point,validate_distinct=False);measurements.append({'id':x.id,'startPoint':values['start'],'endPoint':values['end'],**{key:values[key] for key in ('deltaX','deltaY','deltaZ','horizontalDistance','verticalDistance','distance')},'title':x.title,'description':x.description,'viewerState':x.viewer_state})
+ return APIResponse(data={**summary(s,db),'reportContent':normalize_report_content(s.report_content),'marks':[{'id':x.id,'geometry':x.geometry,'title':x.title,'description':x.description} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],'measurements':measurements,'feedback':s.feedback},request_id=request_id)
 @router.put('/submissions/{sid}/grade')
 def grade(sid:str,p:dict,u:User=Depends(require_teacher),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
  s=db.scalar(select(Submission).where(Submission.id==sid));

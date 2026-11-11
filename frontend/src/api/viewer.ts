@@ -1,5 +1,6 @@
+import { measurementPayload, measurementResults } from '@/utils/contracts'
 import http, { responseData } from '@/api/http'
-import type { Annotation, Measurement, ViewerConfig } from '@/types/viewer'
+import type { Annotation, Measurement, MeasurementPayload, ViewerConfig } from '@/types/viewer'
 
 const useMock = import.meta.env.VITE_USE_MOCK !== 'false'
 const storeKey = (versionId: string, kind: string) => `dici.mock-viewer-${kind}-${versionId}`
@@ -41,9 +42,9 @@ export async function getMeasurements(versionId: string): Promise<Measurement[]>
   if (!useMock) return responseData<Measurement[]>(await http.get(`/api/v1/case-versions/${versionId}/measurements`))
   await wait(); return read<Measurement>(versionId, 'measurements')
 }
-export async function createMeasurement(versionId: string, payload: Omit<Measurement, 'id' | 'createdAt'>): Promise<Measurement> {
-  if (!useMock) return responseData<Measurement>(await http.post(`/api/v1/case-versions/${versionId}/measurements`, payload))
-  await wait(); const item = { ...payload, id: id('measurement'), createdAt: new Date().toISOString() }; const list = read<Measurement>(versionId, 'measurements'); list.unshift(item); write(versionId, 'measurements', list); return item
+export async function createMeasurement(versionId: string, payload: MeasurementPayload): Promise<Measurement> {
+  if (!useMock) return responseData<Measurement>(await http.post(`/api/v1/case-versions/${versionId}/measurements`, measurementPayload(payload)))
+  await wait(); const item = { ...measurementPayload(payload), ...measurementResults(payload), id: id('measurement'), createdAt: new Date().toISOString() }; const list = read<Measurement>(versionId, 'measurements'); list.unshift(item); write(versionId, 'measurements', list); return item
 }
 export async function deleteMeasurement(measurementId: string): Promise<void> {
   if (!useMock) { await http.delete(`/api/v1/measurements/${measurementId}`); return }
