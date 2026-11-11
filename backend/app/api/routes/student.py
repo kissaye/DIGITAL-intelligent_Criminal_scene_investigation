@@ -13,7 +13,8 @@ from app.schemas.common import APIResponse
 from app.schemas.student import DraftPayload
 from app.services.practice_access import require_open_task
 from app.models.case import TeachingCopy
-from app.services.measurements import points_and_distance
+from app.services.measurements import measurement_values
+from app.services.report_content import normalize_report_content
 router=APIRouter(prefix="/student",tags=["student"]); settings=get_settings()
 def utc_time(value):
     if value is None: return None
@@ -43,14 +44,18 @@ def workspace(task_id:str,response:Response,user:User=Depends(require_student),d
     forced=[{**r,"enforced":True} for r in copy.desensitization_rules]
     return APIResponse(data={"task":taskdata(db,t,user),"draft":subdata(db,d) if d else None,"viewerConfig":{"versionId":v.id,"manifestUrl":f"{settings.api_v1_prefix}/viewer-assets/{v.id}/metadata.json","forcedDesensitizationRules":forced}},request_id=request_id)
 def subdata(db,s):
-    return {"id":s.id,"status":s.status,"reportContent":s.report_content,"marks":[{"id":x.id,"geometry":x.geometry,"title":x.title,"description":x.description,"viewerState":x.viewer_state} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],"measurements":[{"id":x.id,"startPoint":x.start_point,"endPoint":x.end_point,"distance":x.distance,"viewerState":x.viewer_state} for x in db.scalars(select(SubmissionMeasurement).where(SubmissionMeasurement.submission_id==s.id))],"submittedAt":s.submitted_at,"version":f"v{s.version_no}"}
+    measurements=[]
+    for x in db.scalars(select(SubmissionMeasurement).where(SubmissionMeasurement.submission_id==s.id)):
+        values=measurement_values(x.start_point,x.end_point,validate_distinct=False)
+        measurements.append({"id":x.id,"startPoint":values["start"],"endPoint":values["end"],**{key:values[key] for key in ("deltaX","deltaY","deltaZ","horizontalDistance","verticalDistance","distance")},"title":x.title,"description":x.description,"viewerState":x.viewer_state})
+    return {"id":s.id,"status":s.status,"reportContent":normalize_report_content(s.report_content),"marks":[{"id":x.id,"geometry":x.geometry,"title":x.title,"description":x.description,"viewerState":x.viewer_state} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],"measurements":measurements,"submittedAt":s.submitted_at,"version":f"v{s.version_no}"}
 def save(db,t,u,p):
     if db.scalar(select(Submission).where(Submission.task_id==t.id,Submission.student_id==u.id,Submission.status=="SUBMITTED")):
         raise HTTPException(409,"Submitted work is frozen")
-    validated=[points_and_distance(m.start_point,m.end_point) for m in p.measurements]
-    s=draft(db,t,u) or Submission(task_id=t.id,student_id=u.id,status="DRAFT",version_no=1);db.add(s);db.flush();s.report_content=p.report_content;db.query(SubmissionMark).filter_by(submission_id=s.id).delete();db.query(SubmissionMeasurement).filter_by(submission_id=s.id).delete()
+    validated=[measurement_values(m.start_point,m.end_point) for m in p.measurements]
+    s=draft(db,t,u) or Submission(task_id=t.id,student_id=u.id,status="DRAFT",version_no=1);db.add(s);db.flush();s.report_content=p.report_content.model_dump(by_alias=True);db.query(SubmissionMark).filter_by(submission_id=s.id).delete();db.query(SubmissionMeasurement).filter_by(submission_id=s.id).delete()
     for m in p.marks: db.add(SubmissionMark(submission_id=s.id,geometry=m.get("geometry",{}),title=m.get("title",""),description=m.get("description"),viewer_state=m.get("viewerState")))
-    for m,(a,b,dist) in zip(p.measurements,validated): db.add(SubmissionMeasurement(submission_id=s.id,start_point=a,end_point=b,distance=dist,viewer_state=m.viewer_state))
+    for m,values in zip(p.measurements,validated): db.add(SubmissionMeasurement(submission_id=s.id,start_point=values["start"],end_point=values["end"],distance=values["distance"],title=m.title,description=m.description,viewer_state=m.viewer_state))
     return s
 @router.put("/tasks/{task_id}/draft")
 def save_draft(task_id:str,payload:DraftPayload,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):

@@ -16,7 +16,7 @@ from app.models.user import User
 from app.schemas.common import APIResponse
 from app.schemas.viewer import AnnotationCreate, AnnotationData, MeasurementCreate, MeasurementData
 from app.services.practice_access import require_open_task
-from app.services.measurements import points_and_distance
+from app.services.measurements import measurement_values
 
 router = APIRouter(tags=["viewer"])
 settings = get_settings()
@@ -31,7 +31,8 @@ def _annotation(item: Annotation) -> AnnotationData:
     return AnnotationData(id=item.id, case_version_id=item.case_version_id, scope=item.scope, type=item.type, geometry=item.geometry, title=item.title, description=item.description, viewer_state=item.viewer_state, created_at=item.created_at, updated_at=item.updated_at)
 
 def _measurement(item: Measurement) -> MeasurementData:
-    return MeasurementData(id=item.id, case_version_id=item.case_version_id, start_point=item.start_point, end_point=item.end_point, distance=item.distance, viewer_state=item.viewer_state, created_at=item.created_at, updated_at=item.updated_at)
+    values = measurement_values(item.start_point, item.end_point, validate_distinct=False)
+    return MeasurementData(id=item.id, case_version_id=item.case_version_id, start_point=values["start"], end_point=values["end"], delta_x=values["deltaX"], delta_y=values["deltaY"], delta_z=values["deltaZ"], horizontal_distance=values["horizontalDistance"], vertical_distance=values["verticalDistance"], distance=values["distance"], title=item.title, description=item.description, viewer_state=item.viewer_state, created_at=item.created_at, updated_at=item.updated_at)
 
 @router.get("/case-versions/{version_id}/viewer-config")
 def viewer_config(version_id: str, response: Response, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):
@@ -113,8 +114,8 @@ def measurements(version_id: str, admin: Annotated[User, Depends(require_admin)]
 @router.post("/case-versions/{version_id}/measurements", status_code=201)
 def create_measurement(version_id: str, payload: MeasurementCreate, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):
     _ready(db, version_id)
-    start,end,distance=points_and_distance(payload.start_point,payload.end_point)
-    item = Measurement(case_version_id=version_id, owner_id=admin.id, start_point=start, end_point=end, distance=distance, viewer_state=payload.viewer_state); db.add(item); db.flush(); db.add(AuditLog(action="MEASUREMENT_CREATED", actor_id=admin.id, case_version_id=version_id, detail={"measurementId": item.id})); db.commit(); db.refresh(item); return APIResponse(data=_measurement(item), request_id=request_id)
+    values=measurement_values(payload.start_point,payload.end_point)
+    item = Measurement(case_version_id=version_id, owner_id=admin.id, start_point=values["start"], end_point=values["end"], distance=values["distance"], title=payload.title, description=payload.description, viewer_state=payload.viewer_state); db.add(item); db.flush(); db.add(AuditLog(action="MEASUREMENT_CREATED", actor_id=admin.id, case_version_id=version_id, detail={"measurementId": item.id,"title":item.title})); db.commit(); db.refresh(item); return APIResponse(data=_measurement(item), request_id=request_id)
 
 @router.delete("/measurements/{measurement_id}")
 def delete_measurement(measurement_id: str, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):

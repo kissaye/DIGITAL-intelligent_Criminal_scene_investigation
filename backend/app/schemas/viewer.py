@@ -37,7 +37,8 @@ class MeasurementCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     start_point: Coordinate3D = Field(alias="startPoint")
     end_point: Coordinate3D = Field(alias="endPoint")
-    distance: float | None = None
+    title: str | None = Field(default=None, max_length=200)
+    description: str | None = None
     viewer_state: dict | None = Field(default=None, alias="viewerState")
 
 
@@ -46,7 +47,14 @@ class MeasurementData(BaseModel):
     case_version_id: str = Field(serialization_alias="caseVersionId")
     start_point: dict = Field(serialization_alias="startPoint")
     end_point: dict = Field(serialization_alias="endPoint")
+    delta_x: float = Field(serialization_alias="deltaX")
+    delta_y: float = Field(serialization_alias="deltaY")
+    delta_z: float = Field(serialization_alias="deltaZ")
+    horizontal_distance: float = Field(serialization_alias="horizontalDistance")
+    vertical_distance: float = Field(serialization_alias="verticalDistance")
     distance: float
+    title: str | None = None
+    description: str | None = None
     viewer_state: dict | None = Field(serialization_alias="viewerState")
     created_at: datetime = Field(serialization_alias="createdAt")
     updated_at: datetime = Field(serialization_alias="updatedAt")
