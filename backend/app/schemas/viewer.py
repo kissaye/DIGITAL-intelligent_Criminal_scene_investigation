@@ -81,3 +81,33 @@ class AreaMeasurementData(BaseModel):
     viewer_state: dict | None = Field(serialization_alias="viewerState")
     created_at: datetime = Field(serialization_alias="createdAt")
     updated_at: datetime = Field(serialization_alias="updatedAt")
+
+
+class ProfileCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    points: list[Coordinate3D] = Field(min_length=2, max_length=50)
+    width: float = Field(ge=0.01, le=100)
+    title: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    viewer_state: dict | None = Field(default=None, alias="viewerState")
+
+    @field_validator("width", mode="before")
+    @classmethod
+    def finite_width(cls, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError("width must be a finite number")
+        return float(value)
+
+
+class ProfileData(BaseModel):
+    id: str
+    case_version_id: str = Field(serialization_alias="caseVersionId")
+    points: list[dict]
+    point_count: int = Field(serialization_alias="pointCount")
+    width: float
+    path_length: float = Field(serialization_alias="pathLength")
+    title: str | None = None
+    description: str | None = None
+    viewer_state: dict | None = Field(serialization_alias="viewerState")
+    created_at: datetime = Field(serialization_alias="createdAt")
+    updated_at: datetime = Field(serialization_alias="updatedAt")

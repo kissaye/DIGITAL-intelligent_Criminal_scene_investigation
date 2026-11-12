@@ -76,10 +76,10 @@ def published():
     return client, admin, teacher, student, case_id, version_id, authorization_id, publication
 
 
-def test_migrations_from_0010_to_0011():
-    old_db = Path(_tmp.name, "from_0010.db")
+def test_migrations_from_0011_to_0012():
+    old_db = Path(_tmp.name, "from_0011.db")
     os.environ["DATABASE_URL"] = f"sqlite:///{old_db.as_posix()}"; get_settings.cache_clear()
-    upgrade("202611110010"); upgrade("head")
+    upgrade("202611110011"); upgrade("head")
     migrated_engine = create_engine(os.environ["DATABASE_URL"])
     columns = {column["name"] for column in inspect(migrated_engine).get_columns("teaching_copies")}
     assert {"review_note", "case_version_id", "manifest_key"} <= columns
@@ -89,11 +89,13 @@ def test_migrations_from_0010_to_0011():
     assert {"title", "description"} <= submission_measurement_columns
     assert {"points", "perimeter", "area", "owner_id"} <= {column["name"] for column in inspect(migrated_engine).get_columns("area_measurements")}
     assert {"points", "perimeter", "area", "submission_id"} <= {column["name"] for column in inspect(migrated_engine).get_columns("submission_area_measurements")}
+    assert {"points", "width", "path_length", "owner_id"} <= {column["name"] for column in inspect(migrated_engine).get_columns("profile_measurements")}
+    assert {"points", "width", "path_length", "submission_id"} <= {column["name"] for column in inspect(migrated_engine).get_columns("submission_profiles")}
     migrated_engine.dispose()
     os.environ["DATABASE_URL"] = f"sqlite:///{Path(_tmp.name, 'm5.db').as_posix()}"; get_settings.cache_clear()
 
 
-def test_migrations_from_0001_to_0011():
+def test_migrations_from_0001_to_0012():
     old_db = Path(_tmp.name, "from_0001.db")
     os.environ["DATABASE_URL"] = f"sqlite:///{old_db.as_posix()}"; get_settings.cache_clear()
     upgrade("202610280001"); upgrade("head")
@@ -102,6 +104,7 @@ def test_migrations_from_0001_to_0011():
     assert {"title", "description"} <= {column["name"] for column in inspector.get_columns("measurements")}
     assert {"title", "description"} <= {column["name"] for column in inspector.get_columns("submission_measurements")}
     assert inspector.has_table("area_measurements") and inspector.has_table("submission_area_measurements")
+    assert inspector.has_table("profile_measurements") and inspector.has_table("submission_profiles")
     migrated_engine.dispose()
     os.environ["DATABASE_URL"] = f"sqlite:///{Path(_tmp.name, 'm5.db').as_posix()}"; get_settings.cache_clear()
 
@@ -161,6 +164,12 @@ def test_m8_m9_measurement_http_contract(published):
     assert client.get(f"/api/v1/case-versions/{version_id}/area-measurements", headers=admin).json()["data"][0]["perimeter"] == pytest.approx(12)
     assert client.delete(f"/api/v1/area-measurements/{created_area.json()['data']['id']}", headers=admin).status_code == 200
     assert client.post(f"/api/v1/case-versions/{version_id}/area-measurements", headers=admin, json={**area, "area": 999}).status_code == 422
+    profile = {"points": [{"x": 0, "y": 0, "z": 9}, {"x": 5, "y": 5, "z": 5}, {"x": 9, "y": 9, "z": 0}], "width": 1.0, "title": "房间纵向剖面", "description": "M9.3 教学剖面", "viewerState": {}}
+    created_profile = client.post(f"/api/v1/case-versions/{version_id}/profiles", headers=admin, json=profile)
+    assert created_profile.status_code == 201 and created_profile.json()["data"]["pathLength"] > 0
+    assert client.get(f"/api/v1/case-versions/{version_id}/profiles", headers=admin).status_code == 200
+    assert client.delete(f"/api/v1/profiles/{created_profile.json()['data']['id']}", headers=admin).status_code == 200
+    assert client.post(f"/api/v1/case-versions/{version_id}/profiles", headers=admin, json={**profile, "pathLength": 999}).status_code == 422
 
     course = client.post("/api/v1/teacher/courses", headers=teacher, json={"title": "M8.3"}).json()["data"]
     student_id = client.get("/api/v1/teacher/students", headers=teacher).json()["data"][0]["id"]
@@ -169,7 +178,7 @@ def test_m8_m9_measurement_http_contract(published):
     assert task.status_code == 201
     task_id = task.json()["data"]["id"]
     report = {"overview": "现场概况", "process": "勘验过程", "evidenceDescription": "物证描述", "preliminaryConclusion": "初步结论"}
-    payload = {"reportContent": report, "marks": [], "measurements": [measurement], "areaMeasurements": [area]}
+    payload = {"reportContent": report, "marks": [], "measurements": [measurement], "areaMeasurements": [area], "profiles": [profile]}
     for bad in ({"reportContent": {"overview": ""}, "marks": [], "measurements": []}, {"reportContent": {**report, "unknown": "x"}, "marks": [], "measurements": []}):
         assert client.put(f"/api/v1/student/tasks/{task_id}/draft", headers=student, json=bad).status_code == 422
     zero = {"reportContent": report, "marks": [], "measurements": [{"startPoint": {"x": 0, "y": 0, "z": 0}, "endPoint": {"x": 0, "y": 0, "z": 0}}]}
@@ -178,6 +187,7 @@ def test_m8_m9_measurement_http_contract(published):
     assert saved.status_code == 200 and saved.json()["data"]["reportContent"] == report
     assert saved.json()["data"]["measurements"][0]["deltaZ"] == -9
     assert saved.json()["data"]["areaMeasurements"][0]["area"] == pytest.approx(6)
+    assert saved.json()["data"]["profiles"][0]["pathLength"] > 0
     submitted = client.post(f"/api/v1/student/tasks/{task_id}/submissions", headers=student, json=payload)
     assert submitted.status_code == 200
     assert client.put(f"/api/v1/student/tasks/{task_id}/draft", headers=student, json=payload).status_code == 409
@@ -185,6 +195,7 @@ def test_m8_m9_measurement_http_contract(published):
     detail = client.get(f"/api/v1/teacher/submissions/{submitted.json()['data']['id']}", headers=teacher)
     assert detail.status_code == 200 and detail.json()["data"]["reportContent"] == report
     assert detail.json()["data"]["areaMeasurements"][0]["pointCount"] == 3
+    assert detail.json()["data"]["profiles"][0]["pointCount"] == 3
     submission_id = submitted.json()["data"]["id"]
     with SessionLocal.begin() as db:
         row = db.get(Submission, submission_id)

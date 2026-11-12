@@ -4,13 +4,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.api.deps import get_db,get_request_id,require_teacher
 from app.models.case import AuditLog,Case,CaseVersion
-from app.models.practice import Class,ClassMember,Course,Submission,SubmissionAreaMeasurement,SubmissionMark,SubmissionMeasurement,Task,TaskAssignment
+from app.models.practice import Class,ClassMember,Course,Submission,SubmissionAreaMeasurement,SubmissionMark,SubmissionMeasurement,SubmissionProfile,Task,TaskAssignment
 from app.models.user import User
 from app.schemas.common import APIResponse
 from app.services.publication import require_teaching_version
 from app.services.measurements import measurement_values
 from app.services.report_content import normalize_report_content
 from app.services.area_measurements import area_measurement_values
+from app.services.profiles import profile_values
 router=APIRouter(prefix="/teacher",tags=["teacher"])
 def dt(v): return datetime.fromisoformat(v.replace('Z','+00:00')) if isinstance(v,str) else v
 def classdata(db,x):
@@ -88,12 +89,14 @@ def submissions(tid:str,u:User=Depends(require_teacher),db:Session=Depends(get_d
 def submission(sid:str,u:User=Depends(require_teacher),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
  s=db.scalar(select(Submission).where(Submission.id==sid));
  if not s: raise HTTPException(404,'Submission not found')
- owned_task(db,s.task_id,u); measurements=[]; areas=[]
+ owned_task(db,s.task_id,u); measurements=[]; areas=[]; profiles=[]
  for x in db.scalars(select(SubmissionMeasurement).where(SubmissionMeasurement.submission_id==s.id)):
   values=measurement_values(x.start_point,x.end_point,validate_distinct=False);measurements.append({'id':x.id,'startPoint':values['start'],'endPoint':values['end'],**{key:values[key] for key in ('deltaX','deltaY','deltaZ','horizontalDistance','verticalDistance','distance')},'title':x.title,'description':x.description,'viewerState':x.viewer_state})
  for x in db.scalars(select(SubmissionAreaMeasurement).where(SubmissionAreaMeasurement.submission_id==s.id)):
   values=area_measurement_values(x.points);areas.append({'id':x.id,'points':values['points'],'pointCount':values['pointCount'],'perimeter':values['perimeter'],'area':values['area'],'maxPlaneDeviation':values['maxPlaneDeviation'],'title':x.title,'description':x.description,'viewerState':x.viewer_state})
- return APIResponse(data={**summary(s,db),'reportContent':normalize_report_content(s.report_content),'marks':[{'id':x.id,'geometry':x.geometry,'title':x.title,'description':x.description} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],'measurements':measurements,'areaMeasurements':areas,'feedback':s.feedback},request_id=request_id)
+ for x in db.scalars(select(SubmissionProfile).where(SubmissionProfile.submission_id==s.id)):
+  values=profile_values(x.points,x.width);profiles.append({'id':x.id,'points':values['points'],'pointCount':values['pointCount'],'width':values['width'],'pathLength':values['pathLength'],'title':x.title,'description':x.description,'viewerState':x.viewer_state})
+ return APIResponse(data={**summary(s,db),'reportContent':normalize_report_content(s.report_content),'marks':[{'id':x.id,'geometry':x.geometry,'title':x.title,'description':x.description} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],'measurements':measurements,'areaMeasurements':areas,'profiles':profiles,'feedback':s.feedback},request_id=request_id)
 @router.put('/submissions/{sid}/grade')
 def grade(sid:str,p:dict,u:User=Depends(require_teacher),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
  s=db.scalar(select(Submission).where(Submission.id==sid));

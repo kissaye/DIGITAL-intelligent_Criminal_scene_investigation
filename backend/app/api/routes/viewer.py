@@ -11,11 +11,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_request_id, require_admin
 from app.core.config import get_settings
-from app.models.case import Annotation, AreaMeasurement, AuditLog, CaseVersion, DesensitizationRule, Measurement, TeachingCopy
+from app.models.case import Annotation, AreaMeasurement, AuditLog, CaseVersion, DesensitizationRule, Measurement, ProfileMeasurement, TeachingCopy
 from app.models.user import User
 from app.schemas.common import APIResponse
-from app.schemas.viewer import AnnotationCreate, AnnotationData, AreaMeasurementCreate, AreaMeasurementData, MeasurementCreate, MeasurementData
+from app.schemas.viewer import AnnotationCreate, AnnotationData, AreaMeasurementCreate, AreaMeasurementData, MeasurementCreate, MeasurementData, ProfileCreate, ProfileData
 from app.services.area_measurements import area_measurement_values
+from app.services.profiles import profile_values
 from app.services.practice_access import require_open_task
 from app.services.measurements import measurement_values
 
@@ -38,6 +39,10 @@ def _measurement(item: Measurement) -> MeasurementData:
 def _area_measurement(item: AreaMeasurement) -> AreaMeasurementData:
     values = area_measurement_values(item.points)
     return AreaMeasurementData(id=item.id, case_version_id=item.case_version_id, points=values["points"], point_count=values["pointCount"], perimeter=values["perimeter"], area=values["area"], max_plane_deviation=values["maxPlaneDeviation"], title=item.title, description=item.description, viewer_state=item.viewer_state, created_at=item.created_at, updated_at=item.updated_at)
+
+def _profile(item: ProfileMeasurement) -> ProfileData:
+    values = profile_values(item.points, item.width)
+    return ProfileData(id=item.id, case_version_id=item.case_version_id, points=values["points"], point_count=values["pointCount"], width=values["width"], path_length=values["pathLength"], title=item.title, description=item.description, viewer_state=item.viewer_state, created_at=item.created_at, updated_at=item.updated_at)
 
 @router.get("/case-versions/{version_id}/viewer-config")
 def viewer_config(version_id: str, response: Response, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):
@@ -149,4 +154,26 @@ def delete_area_measurement(area_measurement_id: str, admin: Annotated[User, Dep
     if item is None: raise HTTPException(404, "Area measurement not found")
     if item.owner_id != admin.id: raise HTTPException(403, "Only the owner may delete this area measurement")
     db.add(AuditLog(action="AREA_MEASUREMENT_DELETED", actor_id=admin.id, case_version_id=item.case_version_id, detail={"areaMeasurementId": item.id, "pointCount": len(item.points), "title": item.title})); db.delete(item); db.commit()
+    return APIResponse(data={}, request_id=request_id)
+
+@router.get("/case-versions/{version_id}/profiles")
+def profiles(version_id: str, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db),], request_id: Annotated[str, Depends(get_request_id)]):
+    _ready(db, version_id)
+    rows = db.scalars(select(ProfileMeasurement).where(ProfileMeasurement.case_version_id == version_id, ProfileMeasurement.owner_id == admin.id)).all()
+    return APIResponse(data=[_profile(row) for row in rows], request_id=request_id)
+
+@router.post("/case-versions/{version_id}/profiles", status_code=201)
+def create_profile(version_id: str, payload: ProfileCreate, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):
+    _ready(db, version_id)
+    values = profile_values(payload.points, payload.width)
+    item = ProfileMeasurement(case_version_id=version_id, owner_id=admin.id, points=values["points"], width=values["width"], path_length=values["pathLength"], title=payload.title, description=payload.description, viewer_state=payload.viewer_state)
+    db.add(item); db.flush(); db.add(AuditLog(action="PROFILE_CREATED", actor_id=admin.id, case_version_id=version_id, detail={"profileId": item.id, "pointCount": values["pointCount"], "width": values["width"], "title": item.title})); db.commit(); db.refresh(item)
+    return APIResponse(data=_profile(item), request_id=request_id)
+
+@router.delete("/profiles/{profile_id}")
+def delete_profile(profile_id: str, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):
+    item = db.scalar(select(ProfileMeasurement).where(ProfileMeasurement.id == profile_id))
+    if item is None: raise HTTPException(404, "Profile not found")
+    if item.owner_id != admin.id: raise HTTPException(403, "Only the owner may delete this profile")
+    db.add(AuditLog(action="PROFILE_DELETED", actor_id=admin.id, case_version_id=item.case_version_id, detail={"profileId": item.id, "pointCount": len(item.points), "width": item.width, "title": item.title})); db.delete(item); db.commit()
     return APIResponse(data={}, request_id=request_id)
