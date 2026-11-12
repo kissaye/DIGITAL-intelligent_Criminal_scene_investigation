@@ -1,3 +1,4 @@
+import {profilePayload} from '@/types/profile'
 import {areaPayload} from '@/types/area'
 import { normalizeReport, measurementPayload } from '@/utils/contracts'
 import http, { responseData } from '@/api/http'
@@ -7,12 +8,13 @@ import type { Annotation, Measurement } from '@/types/viewer'
 const useMock = import.meta.env.VITE_USE_MOCK !== 'false'
 const key = (suffix: string) => `dici.mock-student-${suffix}`
 const wait = (ms = 180) => new Promise((resolve) => window.setTimeout(resolve, ms))
-const emptyWorkspace = (): StudentWorkspace => ({ areaMeasurements: [], manifestUrl: '', forcedDesensitizationRules: [], draft: { overview: '', process: '', evidenceDescription: '', preliminaryConclusion: '' }, annotations: [], measurements: [], submitted: false, submittedAt: null, submissionVersion: null })
+const emptyWorkspace = (): StudentWorkspace => ({ profiles:[], areaMeasurements: [], manifestUrl: '', forcedDesensitizationRules: [], draft: { overview: '', process: '', evidenceDescription: '', preliminaryConclusion: '' }, annotations: [], measurements: [], submitted: false, submittedAt: null, submissionVersion: null })
 interface WorkspaceResponse { task: StudentTask; draft: DraftResponse | null; viewerConfig: { versionId: string; manifestUrl: string; forcedDesensitizationRules: StudentWorkspace['forcedDesensitizationRules'] } }
-function toWorkspace(response: WorkspaceResponse): StudentWorkspace { const draft = response.draft; return { areaMeasurements: draft?.areaMeasurements || [], manifestUrl: response.viewerConfig.manifestUrl, forcedDesensitizationRules: response.viewerConfig.forcedDesensitizationRules || [], draft: normalizeReport(draft?.reportContent), annotations: draft?.marks || [], measurements: draft?.measurements || [], submitted: draft?.status === 'SUBMITTED', submittedAt: draft?.submittedAt || null, submissionVersion: draft?.version || null } }
+function toWorkspace(response: WorkspaceResponse): StudentWorkspace { const draft = response.draft; return { profiles:draft?.profiles||[], areaMeasurements: draft?.areaMeasurements || [], manifestUrl: response.viewerConfig.manifestUrl, forcedDesensitizationRules: response.viewerConfig.forcedDesensitizationRules || [], draft: normalizeReport(draft?.reportContent), annotations: draft?.marks || [], measurements: draft?.measurements || [], submitted: draft?.status === 'SUBMITTED', submittedAt: draft?.submittedAt || null, submissionVersion: draft?.version || null } }
 function toPayload(workspace: StudentWorkspace): StudentDraftPayload {
   return {
     reportContent: normalizeReport(workspace.draft),
+    profiles:(workspace.profiles||[]).map(profilePayload),
     areaMeasurements: (workspace.areaMeasurements || []).map(areaPayload),
     marks: workspace.annotations,
     // IDs, timestamps and any server-computed distance are response-only fields.
@@ -20,9 +22,9 @@ function toPayload(workspace: StudentWorkspace): StudentDraftPayload {
     measurements: workspace.measurements.map(measurementPayload),
   }
 }
-function applyDraftResponse(workspace: StudentWorkspace, draft: DraftResponse): StudentWorkspace { return { ...workspace, areaMeasurements: draft.areaMeasurements || [], draft: normalizeReport(draft.reportContent), annotations: draft.marks, measurements: draft.measurements, submitted: draft.status === 'SUBMITTED', submittedAt: draft.submittedAt, submissionVersion: draft.version } }
+function applyDraftResponse(workspace: StudentWorkspace, draft: DraftResponse): StudentWorkspace { return { ...workspace, profiles:draft.profiles||[], areaMeasurements: draft.areaMeasurements || [], draft: normalizeReport(draft.reportContent), annotations: draft.marks, measurements: draft.measurements, submitted: draft.status === 'SUBMITTED', submittedAt: draft.submittedAt, submissionVersion: draft.version } }
 function mockTasks(): StudentTask[] { const raw = localStorage.getItem(key('tasks')); if (raw) return JSON.parse(raw) as StudentTask[]; const tasks: StudentTask[] = [{ id: 'mock-task-001', name: '住宅现场勘查实训', caseName: '教学演示案例', instructions: '完成现场观察、标记与勘验笔录。', caseVersionId: 'mock-version-001', startAt: '2026-10-01T08:00:00+08:00', dueAt: '2026-12-31T23:59:59+08:00', status: 'IN_PROGRESS', allowLate: false, submissionId: null, submittedAt: null, submissionVersion: null }]; localStorage.setItem(key('tasks'), JSON.stringify(tasks)); return tasks }
-function mockWorkspace(taskId: string): StudentWorkspace { const raw = localStorage.getItem(key(`workspace-${taskId}`)); if (raw) { const value = JSON.parse(raw); return {...value, areaMeasurements:value.areaMeasurements||[], draft:normalizeReport(value.draft)} } const workspace = emptyWorkspace(); localStorage.setItem(key(`workspace-${taskId}`), JSON.stringify(workspace)); return workspace }
+function mockWorkspace(taskId: string): StudentWorkspace { const raw = localStorage.getItem(key(`workspace-${taskId}`)); if (raw) { const value = JSON.parse(raw); return {...value, profiles:value.profiles||[], areaMeasurements:value.areaMeasurements||[], draft:normalizeReport(value.draft)} } const workspace = emptyWorkspace(); localStorage.setItem(key(`workspace-${taskId}`), JSON.stringify(workspace)); return workspace }
 function saveWorkspace(taskId: string, value: StudentWorkspace) { localStorage.setItem(key(`workspace-${taskId}`), JSON.stringify(value)) }
 function task(taskId: string) { const item = mockTasks().find((value) => value.id === taskId); if (!item) throw new Error('实训任务不存在'); return item }
 

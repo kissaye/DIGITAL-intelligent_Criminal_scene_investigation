@@ -172,3 +172,18 @@ class AreaMeasurement(Base):
     viewer_state: Mapped[dict | None] = mapped_column(JSON(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class ProfileMeasurement(Base):
+    __tablename__ = "profile_measurements"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    case_version_id: Mapped[str] = mapped_column(ForeignKey("case_versions.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    points: Mapped[list] = mapped_column(JSON(), nullable=False)
+    width: Mapped[float] = mapped_column(nullable=False)
+    path_length: Mapped[float] = mapped_column(nullable=False)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    viewer_state: Mapped[dict | None] = mapped_column(JSON(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

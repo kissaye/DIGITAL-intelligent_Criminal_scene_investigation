@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db,get_request_id,require_student
 from app.core.config import get_settings
 from app.models.case import AuditLog,Case,CaseVersion
-from app.models.practice import Submission,SubmissionAreaMeasurement,SubmissionMark,SubmissionMeasurement,Task,TaskAssignment
+from app.models.practice import Submission,SubmissionAreaMeasurement,SubmissionMark,SubmissionMeasurement,SubmissionProfile,Task,TaskAssignment
 from app.models.user import User
 from app.schemas.common import APIResponse
 from app.schemas.student import DraftPayload
@@ -16,6 +16,7 @@ from app.models.case import TeachingCopy
 from app.services.measurements import measurement_values
 from app.services.report_content import normalize_report_content
 from app.services.area_measurements import area_measurement_values
+from app.services.profiles import profile_values
 router=APIRouter(prefix="/student",tags=["student"]); settings=get_settings()
 def utc_time(value):
     if value is None: return None
@@ -52,16 +53,21 @@ def subdata(db,s):
     areas=[]
     for x in db.scalars(select(SubmissionAreaMeasurement).where(SubmissionAreaMeasurement.submission_id==s.id)):
         values=area_measurement_values(x.points);areas.append({"id":x.id,"points":values["points"],"pointCount":values["pointCount"],"perimeter":values["perimeter"],"area":values["area"],"maxPlaneDeviation":values["maxPlaneDeviation"],"title":x.title,"description":x.description,"viewerState":x.viewer_state})
-    return {"id":s.id,"status":s.status,"reportContent":normalize_report_content(s.report_content),"marks":[{"id":x.id,"geometry":x.geometry,"title":x.title,"description":x.description,"viewerState":x.viewer_state} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],"measurements":measurements,"areaMeasurements":areas,"submittedAt":s.submitted_at,"version":f"v{s.version_no}"}
+    profiles=[]
+    for x in db.scalars(select(SubmissionProfile).where(SubmissionProfile.submission_id==s.id)):
+        values=profile_values(x.points,x.width);profiles.append({"id":x.id,"points":values["points"],"pointCount":values["pointCount"],"width":values["width"],"pathLength":values["pathLength"],"title":x.title,"description":x.description,"viewerState":x.viewer_state})
+    return {"id":s.id,"status":s.status,"reportContent":normalize_report_content(s.report_content),"marks":[{"id":x.id,"geometry":x.geometry,"title":x.title,"description":x.description,"viewerState":x.viewer_state} for x in db.scalars(select(SubmissionMark).where(SubmissionMark.submission_id==s.id))],"measurements":measurements,"areaMeasurements":areas,"profiles":profiles,"submittedAt":s.submitted_at,"version":f"v{s.version_no}"}
 def save(db,t,u,p):
     if db.scalar(select(Submission).where(Submission.task_id==t.id,Submission.student_id==u.id,Submission.status=="SUBMITTED")):
         raise HTTPException(409,"Submitted work is frozen")
     validated=[measurement_values(m.start_point,m.end_point) for m in p.measurements]
     validated_areas=[area_measurement_values(m.points) for m in p.area_measurements]
-    s=draft(db,t,u) or Submission(task_id=t.id,student_id=u.id,status="DRAFT",version_no=1);db.add(s);db.flush();s.report_content=p.report_content.model_dump(by_alias=True);db.query(SubmissionMark).filter_by(submission_id=s.id).delete();db.query(SubmissionMeasurement).filter_by(submission_id=s.id).delete();db.query(SubmissionAreaMeasurement).filter_by(submission_id=s.id).delete()
+    validated_profiles=[profile_values(m.points,m.width) for m in p.profiles]
+    s=draft(db,t,u) or Submission(task_id=t.id,student_id=u.id,status="DRAFT",version_no=1);db.add(s);db.flush();s.report_content=p.report_content.model_dump(by_alias=True);db.query(SubmissionMark).filter_by(submission_id=s.id).delete();db.query(SubmissionMeasurement).filter_by(submission_id=s.id).delete();db.query(SubmissionAreaMeasurement).filter_by(submission_id=s.id).delete();db.query(SubmissionProfile).filter_by(submission_id=s.id).delete()
     for m in p.marks: db.add(SubmissionMark(submission_id=s.id,geometry=m.get("geometry",{}),title=m.get("title",""),description=m.get("description"),viewer_state=m.get("viewerState")))
     for m,values in zip(p.measurements,validated): db.add(SubmissionMeasurement(submission_id=s.id,start_point=values["start"],end_point=values["end"],distance=values["distance"],title=m.title,description=m.description,viewer_state=m.viewer_state))
     for m,values in zip(p.area_measurements,validated_areas): db.add(SubmissionAreaMeasurement(submission_id=s.id,points=values["points"],perimeter=values["perimeter"],area=values["area"],title=m.title,description=m.description,viewer_state=m.viewer_state))
+    for m,values in zip(p.profiles,validated_profiles): db.add(SubmissionProfile(submission_id=s.id,points=values["points"],width=values["width"],path_length=values["pathLength"],title=m.title,description=m.description,viewer_state=m.viewer_state))
     return s
 @router.put("/tasks/{task_id}/draft")
 def save_draft(task_id:str,payload:DraftPayload,user:User=Depends(require_student),db:Session=Depends(get_db),request_id:str=Depends(get_request_id)):
