@@ -58,3 +58,26 @@ class MeasurementData(BaseModel):
     viewer_state: dict | None = Field(serialization_alias="viewerState")
     created_at: datetime = Field(serialization_alias="createdAt")
     updated_at: datetime = Field(serialization_alias="updatedAt")
+
+
+class AreaMeasurementCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    points: list[Coordinate3D] = Field(min_length=3, max_length=100)
+    title: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    viewer_state: dict | None = Field(default=None, alias="viewerState")
+
+
+class AreaMeasurementData(BaseModel):
+    id: str
+    case_version_id: str = Field(serialization_alias="caseVersionId")
+    points: list[dict]
+    point_count: int = Field(serialization_alias="pointCount")
+    perimeter: float
+    area: float
+    max_plane_deviation: float = Field(serialization_alias="maxPlaneDeviation")
+    title: str | None = None
+    description: str | None = None
+    viewer_state: dict | None = Field(serialization_alias="viewerState")
+    created_at: datetime = Field(serialization_alias="createdAt")
+    updated_at: datetime = Field(serialization_alias="updatedAt")

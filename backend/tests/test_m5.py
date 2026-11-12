@@ -76,23 +76,24 @@ def published():
     return client, admin, teacher, student, case_id, version_id, authorization_id, publication
 
 
-def test_migrations_from_empty_and_0007():
-    # The session database was upgraded from empty. A separate file proves 0009 -> 0010.
-    old_db = Path(_tmp.name, "from_0009.db")
+def test_migrations_from_0010_to_0011():
+    old_db = Path(_tmp.name, "from_0010.db")
     os.environ["DATABASE_URL"] = f"sqlite:///{old_db.as_posix()}"; get_settings.cache_clear()
-    upgrade("202611050009"); upgrade("head")
+    upgrade("202611110010"); upgrade("head")
     migrated_engine = create_engine(os.environ["DATABASE_URL"])
     columns = {column["name"] for column in inspect(migrated_engine).get_columns("teaching_copies")}
     assert {"review_note", "case_version_id", "manifest_key"} <= columns
-    measurement_columns = {column["name"] for column in inspect(create_engine(os.environ["DATABASE_URL"])).get_columns("measurements")}
+    measurement_columns = {column["name"] for column in inspect(migrated_engine).get_columns("measurements")}
     submission_measurement_columns = {column["name"] for column in inspect(migrated_engine).get_columns("submission_measurements")}
     assert {"title", "description"} <= measurement_columns
     assert {"title", "description"} <= submission_measurement_columns
+    assert {"points", "perimeter", "area", "owner_id"} <= {column["name"] for column in inspect(migrated_engine).get_columns("area_measurements")}
+    assert {"points", "perimeter", "area", "submission_id"} <= {column["name"] for column in inspect(migrated_engine).get_columns("submission_area_measurements")}
     migrated_engine.dispose()
     os.environ["DATABASE_URL"] = f"sqlite:///{Path(_tmp.name, 'm5.db').as_posix()}"; get_settings.cache_clear()
 
 
-def test_migrations_from_0001_to_0010():
+def test_migrations_from_0001_to_0011():
     old_db = Path(_tmp.name, "from_0001.db")
     os.environ["DATABASE_URL"] = f"sqlite:///{old_db.as_posix()}"; get_settings.cache_clear()
     upgrade("202610280001"); upgrade("head")
@@ -100,6 +101,7 @@ def test_migrations_from_0001_to_0010():
     inspector = inspect(migrated_engine)
     assert {"title", "description"} <= {column["name"] for column in inspector.get_columns("measurements")}
     assert {"title", "description"} <= {column["name"] for column in inspector.get_columns("submission_measurements")}
+    assert inspector.has_table("area_measurements") and inspector.has_table("submission_area_measurements")
     migrated_engine.dispose()
     os.environ["DATABASE_URL"] = f"sqlite:///{Path(_tmp.name, 'm5.db').as_posix()}"; get_settings.cache_clear()
 
@@ -141,7 +143,7 @@ def test_student_teaching_assets_and_revocation(published):
         assert method(url, **kwargs).status_code == 409
 
 
-def test_m8_report_and_m9_measurement_http_contract(published):
+def test_m8_m9_measurement_http_contract(published):
     client, admin, teacher, student, _, version_id, _, _ = published
     measurement = {"startPoint": {"x": 0, "y": 0, "z": 9}, "endPoint": {"x": 9, "y": 9, "z": 0}, "title": "门窗空间测量", "description": "M9.1 教学测量", "viewerState": {}}
     created = client.post(f"/api/v1/case-versions/{version_id}/measurements", headers=admin, json=measurement)
@@ -153,6 +155,12 @@ def test_m8_report_and_m9_measurement_http_contract(published):
     assert client.get(f"/api/v1/case-versions/{version_id}/measurements", headers=admin).json()["data"][0]["distance"] == pytest.approx(15.5884572681)
     assert client.delete(f"/api/v1/measurements/{data['id']}", headers=admin).status_code == 200
     assert client.post(f"/api/v1/case-versions/{version_id}/measurements", headers=admin, json={**measurement, "distance": 1}).status_code == 422
+    area = {"points": [{"x": 0, "y": 0, "z": 0}, {"x": 3, "y": 0, "z": 0}, {"x": 3, "y": 4, "z": 0}], "title": "现场区域 A", "description": "M9.2 教学区域测量", "viewerState": {}}
+    created_area = client.post(f"/api/v1/case-versions/{version_id}/area-measurements", headers=admin, json=area)
+    assert created_area.status_code == 201 and created_area.json()["data"]["area"] == pytest.approx(6)
+    assert client.get(f"/api/v1/case-versions/{version_id}/area-measurements", headers=admin).json()["data"][0]["perimeter"] == pytest.approx(12)
+    assert client.delete(f"/api/v1/area-measurements/{created_area.json()['data']['id']}", headers=admin).status_code == 200
+    assert client.post(f"/api/v1/case-versions/{version_id}/area-measurements", headers=admin, json={**area, "area": 999}).status_code == 422
 
     course = client.post("/api/v1/teacher/courses", headers=teacher, json={"title": "M8.3"}).json()["data"]
     student_id = client.get("/api/v1/teacher/students", headers=teacher).json()["data"][0]["id"]
@@ -161,7 +169,7 @@ def test_m8_report_and_m9_measurement_http_contract(published):
     assert task.status_code == 201
     task_id = task.json()["data"]["id"]
     report = {"overview": "现场概况", "process": "勘验过程", "evidenceDescription": "物证描述", "preliminaryConclusion": "初步结论"}
-    payload = {"reportContent": report, "marks": [], "measurements": [measurement]}
+    payload = {"reportContent": report, "marks": [], "measurements": [measurement], "areaMeasurements": [area]}
     for bad in ({"reportContent": {"overview": ""}, "marks": [], "measurements": []}, {"reportContent": {**report, "unknown": "x"}, "marks": [], "measurements": []}):
         assert client.put(f"/api/v1/student/tasks/{task_id}/draft", headers=student, json=bad).status_code == 422
     zero = {"reportContent": report, "marks": [], "measurements": [{"startPoint": {"x": 0, "y": 0, "z": 0}, "endPoint": {"x": 0, "y": 0, "z": 0}}]}
@@ -169,12 +177,14 @@ def test_m8_report_and_m9_measurement_http_contract(published):
     saved = client.put(f"/api/v1/student/tasks/{task_id}/draft", headers=student, json=payload)
     assert saved.status_code == 200 and saved.json()["data"]["reportContent"] == report
     assert saved.json()["data"]["measurements"][0]["deltaZ"] == -9
+    assert saved.json()["data"]["areaMeasurements"][0]["area"] == pytest.approx(6)
     submitted = client.post(f"/api/v1/student/tasks/{task_id}/submissions", headers=student, json=payload)
     assert submitted.status_code == 200
     assert client.put(f"/api/v1/student/tasks/{task_id}/draft", headers=student, json=payload).status_code == 409
     assert client.post(f"/api/v1/student/tasks/{task_id}/submissions", headers=student, json=payload).status_code == 409
     detail = client.get(f"/api/v1/teacher/submissions/{submitted.json()['data']['id']}", headers=teacher)
     assert detail.status_code == 200 and detail.json()["data"]["reportContent"] == report
+    assert detail.json()["data"]["areaMeasurements"][0]["pointCount"] == 3
     submission_id = submitted.json()["data"]["id"]
     with SessionLocal.begin() as db:
         row = db.get(Submission, submission_id)

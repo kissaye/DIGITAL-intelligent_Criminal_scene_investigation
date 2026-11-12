@@ -22,8 +22,18 @@ class StudentMeasurement(BaseModel):
     viewer_state: dict | None = Field(default=None, alias="viewerState")
 
 
+class StudentAreaMeasurement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str | None = None
+    points: list[Coordinate3D] = Field(min_length=3, max_length=100)
+    title: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    viewer_state: dict | None = Field(default=None, alias="viewerState")
+
+
 class DraftPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     report_content: ReportContent = Field(alias="reportContent")
     marks: list[dict] = Field(default_factory=list)
     measurements: list[StudentMeasurement] = Field(default_factory=list)
+    area_measurements: list[StudentAreaMeasurement] = Field(default_factory=list, alias="areaMeasurements")
