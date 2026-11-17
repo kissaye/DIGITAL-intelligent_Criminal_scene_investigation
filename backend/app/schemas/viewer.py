@@ -111,3 +111,33 @@ class ProfileData(BaseModel):
     viewer_state: dict | None = Field(serialization_alias="viewerState")
     created_at: datetime = Field(serialization_alias="createdAt")
     updated_at: datetime = Field(serialization_alias="updatedAt")
+
+
+class BoxSize(Coordinate3D):
+    @field_validator("x", "y", "z")
+    @classmethod
+    def positive_size(cls, value):
+        if value <= 1e-6 or value > 1_000_000:
+            raise ValueError("size must be greater than 1e-6 and no more than 1000000")
+        return value
+
+
+class VolumeMeasurementCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    center: Coordinate3D
+    size: BoxSize
+    rotation: Coordinate3D
+    title: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    viewer_state: dict | None = Field(default=None, alias="viewerState")
+
+
+class VolumeMeasurementData(BaseModel):
+    id: str
+    case_version_id: str = Field(serialization_alias="caseVersionId")
+    center: dict; size: dict; rotation: dict
+    length: float; width: float; height: float; volume: float
+    title: str | None = None; description: str | None = None
+    viewer_state: dict | None = Field(serialization_alias="viewerState")
+    created_at: datetime = Field(serialization_alias="createdAt")
+    updated_at: datetime = Field(serialization_alias="updatedAt")
