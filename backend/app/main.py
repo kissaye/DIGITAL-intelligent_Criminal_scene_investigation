@@ -22,8 +22,11 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
-def error_response(request: Request, status_code: int, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status_code, content={"code": status_code, "message": message, "data": {}, "requestId": getattr(request.state, "request_id", str(uuid4()))})
+def error_response(request: Request, status_code: int, message: str, details: list[dict] | None = None) -> JSONResponse:
+    content = {"code": status_code, "message": message, "data": {}, "requestId": getattr(request.state, "request_id", str(uuid4()))}
+    if details is not None:
+        content["details"] = details
+    return JSONResponse(status_code=status_code, content=content)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -33,7 +36,20 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    return error_response(request, 422, "Request validation failed")
+    details = []
+    for issue in exc.errors():
+        safe_context = {
+            key: value
+            for key, value in (issue.get("ctx") or {}).items()
+            if value is None or isinstance(value, (str, int, float, bool))
+        }
+        details.append({
+            "type": issue.get("type"),
+            "loc": list(issue.get("loc") or ()),
+            "msg": issue.get("msg"),
+            "ctx": safe_context,
+        })
+    return error_response(request, 422, "请求数据校验失败", details)
 
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)

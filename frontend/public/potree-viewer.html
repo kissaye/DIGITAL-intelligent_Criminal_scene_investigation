@@ -17,6 +17,7 @@
 <script src="/vendor/potree/libs/jstree/jstree.js"></script>
 <script src="/vendor/potree/build/potree/potree.js"></script>
 <script src="/vendor/potree/libs/plasio/js/laslaz.js"></script>
+<script src="/volume-measurement.js"></script>
 <script src="/profile-measurement.js"></script>
 <script src="/polygon-measurement.js"></script>
 <script src="/two-point-measurement.js"></script>
@@ -55,7 +56,7 @@ function masks(items){if(mock){
   });return;
 }if(!viewer)return;maskVolumes.forEach(v=>viewer.scene.removeVolume(v));maskVolumes=[];items.filter(x=>x.type==='HIDE').forEach(x=>{const a=x.range.min,b=x.range.max,v=new Potree.BoxVolume();v.name=x.title||'教学强制遮挡';v.position.set((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);v.scale.set(Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1]),Math.abs(b[2]-a[2]));v.clip=true;v.material.opacity=.28;v.material.color.set(0xe6a23c);viewer.scene.addVolume(v);maskVolumes.push(v)});if(maskVolumes.length){viewer.setClipTask(Potree.ClipTask.SHOW_OUTSIDE);if(Potree.ClipMethod)viewer.setClipMethod(Potree.ClipMethod.INSIDE_ANY)}else viewer.setClipTask(Potree.ClipTask.NONE)}
 function xyz(v){return{x:v.x,y:v.y,z:v.z}}
-function pick(){profileSession?.cancel();
+function pick(){volumeSession?.cancel();profileSession?.cancel();
   polygonSession?.cancel();
   measurementSession?.cancel();
   if(mock){send('pick',{point:{x:0,y:0,z:0}});return send('tool-status',{message:'已选取模拟点位'})}
@@ -70,8 +71,10 @@ function pick(){profileSession?.cancel();
     send('tool-status',{message:'点位已选取'});
   });
 }
-let measurementSession,polygonSession,profileSession;
-function profileStart(){measurementSession?.cancel();polygonSession?.cancel();profileSession?.cancel();if(mock){send('tool-status',{message:'模拟剖面节点，未加载真实点云'});send('profile',{points:[{x:0,y:0,z:9},{x:5,y:5,z:5},{x:9,y:9,z:0}]});return}if(!viewer)return;profileSession=createProfileMeasurement({viewer,Potree,status:message=>send('tool-status',{message}),complete:value=>send('profile',value)});profileSession.begin()}
+let measurementSession,polygonSession,profileSession,volumeSession;
+function volumeStart(){measurementSession?.cancel();polygonSession?.cancel();profileSession?.cancel();volumeSession?.cancel();if(mock){send('tool-status',{message:'模拟包围盒 · 待服务端计算'});send('volume',{center:{x:4.5,y:4.5,z:4.5},size:{x:3,y:4,z:5},rotation:{x:0,y:0,z:0}});return}if(!viewer)return;volumeSession=createVolumeMeasurement({viewer,status:message=>send('tool-status',{message}),complete:value=>send('volume',value)});volumeSession.begin()}
+function volumeOpen(value){if(mock){send('tool-status',{message:'模拟包围盒重新打开'});return}if(!viewer)return;const box=new Potree.BoxVolume();box.clip=false;box.showVolumeLabel=false;box.position.set(value.center.x,value.center.y,value.center.z);box.scale.set(value.size.x,value.size.y,value.size.z);box.rotation.set(value.rotation.x,value.rotation.y,value.rotation.z);viewer.scene.addVolume(box)}
+function profileStart(){volumeSession?.cancel();measurementSession?.cancel();polygonSession?.cancel();profileSession?.cancel();if(mock){send('tool-status',{message:'模拟剖面节点，未加载真实点云'});send('profile',{points:[{x:0,y:0,z:9},{x:5,y:5,z:5},{x:9,y:9,z:0}]});return}if(!viewer)return;profileSession=createProfileMeasurement({viewer,Potree,status:message=>send('tool-status',{message}),complete:value=>send('profile',value)});profileSession.begin()}
 let profilePreviewToken=0,guiPromise;
 async function openProfile(value){
   const token=++profilePreviewToken;
@@ -87,8 +90,8 @@ async function openProfile(value){
   }catch{send('tool-status',{message:'剖面窗口暂不可用，仍可保存剖面定义'})}
 }
 
-function polygon(){profileSession?.cancel();measurementSession?.cancel();polygonSession?.cancel();if(mock){send('tool-status',{message:'模拟区域：3个示例顶点，未执行真实拾取'});send('polygon',{points:[{x:0,y:0,z:0},{x:3,y:0,z:0},{x:3,y:4,z:0}]});return}if(!viewer)return;polygonSession=createPolygonMeasurement({viewer,Potree,status:message=>send('tool-status',{message}),complete:result=>send('polygon',result)});polygonSession.begin()}
-function measure(){profileSession?.cancel();
+function polygon(){volumeSession?.cancel();profileSession?.cancel();measurementSession?.cancel();polygonSession?.cancel();if(mock){send('tool-status',{message:'模拟区域：3个示例顶点，未执行真实拾取'});send('polygon',{points:[{x:0,y:0,z:0},{x:3,y:0,z:0},{x:3,y:4,z:0}]});return}if(!viewer)return;polygonSession=createPolygonMeasurement({viewer,Potree,status:message=>send('tool-status',{message}),complete:result=>send('polygon',result)});polygonSession.begin()}
+function measure(){volumeSession?.cancel();profileSession?.cancel();
   polygonSession?.cancel();
   if(mock){send('measurement',{startPoint:{x:1,y:2,z:3},endPoint:{x:4,y:6,z:3}});return send('tool-status',{message:'模拟测距已完成'})}
   if(!viewer)return;
@@ -101,5 +104,5 @@ function measure(){profileSession?.cancel();
   measurementSession.begin();
 }
 function area(){profileSession?.cancel();polygonSession?.cancel();measurementSession?.cancel();if(!viewer)return;let h=e=>{let v=e.volume;if(v)send('area',{area:{center:[v.position.x,v.position.y,v.position.z],size:[v.scale.x,v.scale.y,v.scale.z],rotation:[v.rotation.x,v.rotation.y,v.rotation.z]}});viewer.volumeTool.removeEventListener('volume_added',h)};viewer.volumeTool.addEventListener('volume_added',h);viewer.volumeTool.startInsertion({clip:true})}
-addEventListener('message',e=>{if(e.origin!==location.origin||e.data?.source!=='dici-parent')return;let d=e.data;if(d.type==='load')load(d.manifestUrl);if(d.type==='load-mock')boot();if(d.type==='set-desensitization-masks'){masks(d.masks||[]);highlight(d.selectedRule)};if(d.type==='reset'&&viewer)viewer.fitToScreen();if(d.type==='pick-point')pick();if(d.type==='profile')profileStart();if(d.type==='profile-preview')openProfile(d);if(d.type==='profile-cancel'){profilePreviewToken++;profileSession?.cancel()}if(d.type==='profile-saving')profileSession?.saving();if(d.type==='profile-saved')profileSession?.saved();if(d.type==='profile-failed')profileSession?.failed();if(d.type==='measure')measure();if(d.type==='polygon')polygon();if(d.type==='polygon-cancel')polygonSession?.cancel();if(d.type==='polygon-saving')polygonSession?.saving();if(d.type==='polygon-saved')polygonSession?.saved();if(d.type==='polygon-failed')polygonSession?.failed();if(d.type==='area')area()});window.addEventListener('pagehide',()=>measurementSession?.cancel());boot();
+addEventListener('message',e=>{if(e.origin!==location.origin||e.data?.source!=='dici-parent')return;let d=e.data;if(d.type==='load')load(d.manifestUrl);if(d.type==='load-mock')boot();if(d.type==='set-desensitization-masks'){masks(d.masks||[]);highlight(d.selectedRule)};if(d.type==='reset'&&viewer)viewer.fitToScreen();if(d.type==='pick-point')pick();if(d.type==='profile')profileStart();if(d.type==='profile-preview')openProfile(d);if(d.type==='profile-cancel'){profilePreviewToken++;profileSession?.cancel()}if(d.type==='profile-saving')profileSession?.saving();if(d.type==='profile-saved')profileSession?.saved();if(d.type==='profile-failed')profileSession?.failed();if(d.type==='volume')volumeStart();if(d.type==='volume-open')volumeOpen(d);if(d.type==='volume-saving')volumeSession?.saving();if(d.type==='volume-saved')volumeSession?.saved();if(d.type==='volume-failed')volumeSession?.failed();if(d.type==='volume-cancel')volumeSession?.cancel();if(d.type==='measure')measure();if(d.type==='polygon')polygon();if(d.type==='polygon-cancel')polygonSession?.cancel();if(d.type==='polygon-saving')polygonSession?.saving();if(d.type==='polygon-saved')polygonSession?.saved();if(d.type==='polygon-failed')polygonSession?.failed();if(d.type==='area')area()});window.addEventListener('pagehide',()=>measurementSession?.cancel());boot();
 </script></body></html>

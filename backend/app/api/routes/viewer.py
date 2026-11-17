@@ -11,12 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_request_id, require_admin
 from app.core.config import get_settings
-from app.models.case import Annotation, AreaMeasurement, AuditLog, CaseVersion, DesensitizationRule, Measurement, ProfileMeasurement, TeachingCopy
+from app.models.case import Annotation, AreaMeasurement, AuditLog, CaseVersion, DesensitizationRule, Measurement, ProfileMeasurement, TeachingCopy, VolumeMeasurement
 from app.models.user import User
 from app.schemas.common import APIResponse
-from app.schemas.viewer import AnnotationCreate, AnnotationData, AreaMeasurementCreate, AreaMeasurementData, MeasurementCreate, MeasurementData, ProfileCreate, ProfileData
+from app.schemas.viewer import AnnotationCreate, AnnotationData, AreaMeasurementCreate, AreaMeasurementData, MeasurementCreate, MeasurementData, ProfileCreate, ProfileData, VolumeMeasurementCreate, VolumeMeasurementData
 from app.services.area_measurements import area_measurement_values
 from app.services.profiles import profile_values
+from app.services.volumes import volume_values
 from app.services.practice_access import require_open_task
 from app.services.measurements import measurement_values
 
@@ -43,6 +44,10 @@ def _area_measurement(item: AreaMeasurement) -> AreaMeasurementData:
 def _profile(item: ProfileMeasurement) -> ProfileData:
     values = profile_values(item.points, item.width)
     return ProfileData(id=item.id, case_version_id=item.case_version_id, points=values["points"], point_count=values["pointCount"], width=values["width"], path_length=values["pathLength"], title=item.title, description=item.description, viewer_state=item.viewer_state, created_at=item.created_at, updated_at=item.updated_at)
+
+def _volume(item: VolumeMeasurement) -> VolumeMeasurementData:
+    values=volume_values(item.center,item.size,item.rotation)
+    return VolumeMeasurementData(id=item.id,case_version_id=item.case_version_id,center=values["center"],size=values["size"],rotation=values["rotation"],length=values["length"],width=values["width"],height=values["height"],volume=values["volume"],title=item.title,description=item.description,viewer_state=item.viewer_state,created_at=item.created_at,updated_at=item.updated_at)
 
 @router.get("/case-versions/{version_id}/viewer-config")
 def viewer_config(version_id: str, response: Response, admin: Annotated[User, Depends(require_admin)], db: Annotated[Session, Depends(get_db)], request_id: Annotated[str, Depends(get_request_id)]):
@@ -177,3 +182,16 @@ def delete_profile(profile_id: str, admin: Annotated[User, Depends(require_admin
     if item.owner_id != admin.id: raise HTTPException(403, "Only the owner may delete this profile")
     db.add(AuditLog(action="PROFILE_DELETED", actor_id=admin.id, case_version_id=item.case_version_id, detail={"profileId": item.id, "pointCount": len(item.points), "width": item.width, "title": item.title})); db.delete(item); db.commit()
     return APIResponse(data={}, request_id=request_id)
+
+@router.get("/case-versions/{version_id}/volume-measurements")
+def volume_measurements(version_id:str,admin:Annotated[User,Depends(require_admin)],db:Annotated[Session,Depends(get_db)],request_id:Annotated[str,Depends(get_request_id)]):
+    _ready(db,version_id);rows=db.scalars(select(VolumeMeasurement).where(VolumeMeasurement.case_version_id==version_id,VolumeMeasurement.owner_id==admin.id)).all();return APIResponse(data=[_volume(row) for row in rows],request_id=request_id)
+@router.post("/case-versions/{version_id}/volume-measurements",status_code=201)
+def create_volume_measurement(version_id:str,payload:VolumeMeasurementCreate,admin:Annotated[User,Depends(require_admin)],db:Annotated[Session,Depends(get_db)],request_id:Annotated[str,Depends(get_request_id)]):
+    _ready(db,version_id);values=volume_values(payload.center,payload.size,payload.rotation);item=VolumeMeasurement(case_version_id=version_id,owner_id=admin.id,center=values["center"],size=values["size"],rotation=values["rotation"],length=values["length"],width=values["width"],height=values["height"],volume=values["volume"],title=payload.title,description=payload.description,viewer_state=payload.viewer_state);db.add(item);db.flush();db.add(AuditLog(action="VOLUME_MEASUREMENT_CREATED",actor_id=admin.id,case_version_id=version_id,detail={"volumeMeasurementId":item.id,"title":item.title,"size":values["size"],"volume":values["volume"]}));db.commit();db.refresh(item);return APIResponse(data=_volume(item),request_id=request_id)
+@router.delete("/volume-measurements/{volume_measurement_id}")
+def delete_volume_measurement(volume_measurement_id:str,admin:Annotated[User,Depends(require_admin)],db:Annotated[Session,Depends(get_db)],request_id:Annotated[str,Depends(get_request_id)]):
+    item=db.scalar(select(VolumeMeasurement).where(VolumeMeasurement.id==volume_measurement_id))
+    if item is None: raise HTTPException(404,"Volume measurement not found")
+    if item.owner_id!=admin.id: raise HTTPException(403,"Only the owner may delete this volume measurement")
+    db.add(AuditLog(action="VOLUME_MEASUREMENT_DELETED",actor_id=admin.id,case_version_id=item.case_version_id,detail={"volumeMeasurementId":item.id,"title":item.title,"size":item.size,"volume":item.volume}));db.delete(item);db.commit();return APIResponse(data={},request_id=request_id)
